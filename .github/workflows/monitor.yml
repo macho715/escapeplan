@@ -92,14 +92,26 @@ jobs:
           cp state/hyie_state.json /tmp/hyie_state.json
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin urgentdash-live
-          git checkout urgentdash-live
+          if git ls-remote --exit-code --heads origin urgentdash-live > /dev/null; then
+            git fetch origin urgentdash-live
+            git checkout urgentdash-live
+          else
+            git checkout --orphan urgentdash-live
+            git rm -rf . > /dev/null 2>&1 || true
+          fi
           mkdir -p live
           cp /tmp/hyie_state.json live/hyie_state.json
           git add live/hyie_state.json
-          git diff --cached --quiet && echo "No changes" || \
-            git commit -m "chore: update hyie_state.json [skip ci]" && \
-            git push origin urgentdash-live
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update hyie_state.json [skip ci]"
+            if git ls-remote --exit-code --heads origin urgentdash-live > /dev/null; then
+              git push origin urgentdash-live
+            else
+              git push -u origin urgentdash-live
+            fi
+          fi
           echo "Published hyie_state.json to urgentdash-live branch"
 
       - name: Upload artifacts (reports/state/ledger) for debugging
