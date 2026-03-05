@@ -92,7 +92,7 @@ jobs:
           python scripts/run_now.py --telegram-send
 
       - name: Publish hyie_state.json to urgentdash-live branch
-        if: always()
+        if: success()
         run: |
           if [ ! -f state/hyie_state.json ]; then
             echo "state/hyie_state.json not found, skipping publish"
