@@ -99,6 +99,9 @@ jobs:
             git checkout --orphan urgentdash-live
             git rm -rf . > /dev/null 2>&1 || true
           fi
+          if [ ! -d react ]; then
+            git checkout origin/main -- react
+          fi
           mkdir -p live
           cp /tmp/hyie_state.json live/hyie_state.json
           git add live/hyie_state.json
