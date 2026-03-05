@@ -41,6 +41,7 @@ export const SNAPSHOT_REQUIRED_KEYS = ["intel_feed", "indicators", "hypotheses",
 
 export const DEFAULT_DASHBOARD_CANDIDATES = [
   "http://127.0.0.1:8000/api/state",
+  "https://raw.githubusercontent.com/macho715/escapeplan/main/live/hyie_state.json",
   "https://raw.githubusercontent.com/macho715/iran-war-notelm/urgentdash-live/live/hyie_state.json",
   "/api/state",
   "./api/state",
@@ -50,6 +51,7 @@ export const DEFAULT_DASHBOARD_CANDIDATES = [
 
 export const DEFAULT_FAST_STATE_CANDIDATES = [
   "http://127.0.0.1:8000/api/state",
+  "https://raw.githubusercontent.com/macho715/escapeplan/main/live/hyie_state.json",
   "https://raw.githubusercontent.com/macho715/iran-war-notelm/urgentdash-live/live/hyie_state.json",
   "/api/state",
   "./api/state",
