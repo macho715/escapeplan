@@ -90,6 +90,7 @@ jobs:
             exit 0
           fi
           cp state/hyie_state.json /tmp/hyie_state.json
+          git checkout -- state/hyie_state.json || true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git ls-remote --exit-code --heads origin urgentdash-live > /dev/null; then
