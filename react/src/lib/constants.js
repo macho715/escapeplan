@@ -15,7 +15,7 @@ export const FULL_SYNC_INTERVAL_MS = POLL_INTERVAL_MS;
 export const FAST_POLL_MS_DEFAULT = 30 * 1000;
 export const FAST_COUNTDOWN_SECONDS = 30;
 export const COUNTDOWN_SECONDS = FAST_COUNTDOWN_SECONDS;
-export const LIVE_STALE_THRESHOLD_SECONDS = 2100; // 35분 (GHA 30분 주기 + 5분 여유)
+export const LIVE_STALE_THRESHOLD_SECONDS = 2400; // 40분 SLA (GHA 30분 + 10분 여유)
 
 export const MIN_EVIDENCE_SOURCES = 2;
 export const FALLBACK_EGRESS_LOSS_ETA = 10;
@@ -40,9 +40,8 @@ export const I02_SEGMENTS = [
 export const SNAPSHOT_REQUIRED_KEYS = ["intel_feed", "indicators", "hypotheses", "routes", "checklist"];
 
 export const DEFAULT_DASHBOARD_CANDIDATES = [
+  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/hyie_state.json",
   "http://127.0.0.1:8000/api/state",
-  "https://raw.githubusercontent.com/macho715/escapeplan/main/live/hyie_state.json",
-  "https://raw.githubusercontent.com/macho715/iran-war-notelm/urgentdash-live/live/hyie_state.json",
   "/api/state",
   "./api/state",
   "api/state",
@@ -50,9 +49,8 @@ export const DEFAULT_DASHBOARD_CANDIDATES = [
 ];
 
 export const DEFAULT_FAST_STATE_CANDIDATES = [
+  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/hyie_state.json",
   "http://127.0.0.1:8000/api/state",
-  "https://raw.githubusercontent.com/macho715/escapeplan/main/live/hyie_state.json",
-  "https://raw.githubusercontent.com/macho715/iran-war-notelm/urgentdash-live/live/hyie_state.json",
   "/api/state",
   "./api/state",
   "api/state"

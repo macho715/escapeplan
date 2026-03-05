@@ -324,6 +324,7 @@ export default function App() {
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <Pill label="MODE" value={derived.modeState} color={derived.modeColor} />
             <Pill label="Gate" value={derived.gateState} color={derived.gateState === "BLOCKED" ? "#ef4444" : derived.gateState === "CAUTION" ? "#f59e0b" : "#22c55e"} />
+            <Pill label="SLA40" value={derived.liveStale ? "BREACH" : "OK"} color={derived.liveStale ? "#ef4444" : "#22c55e"} />
             <Pill label="I02" value={`${derived.airspaceState}/${derived.airspaceSegment}`} color={derived.airspaceState === "OPEN" ? "#22c55e" : derived.airspaceState === "DISRUPTED" ? "#f59e0b" : "#ef4444"} />
             <button onClick={() => fetchDashboard(true)} style={{ background: "#0b1220", border: "1px solid #1e293b", color: "#e2e8f0", borderRadius: 10, padding: "10px 12px", fontSize: 11, fontWeight: 900, cursor: "pointer" }}>🔄 Refresh</button>
           </div>

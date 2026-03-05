@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     # Phase 2
     PHASE2_ENABLED: bool = True
+    PHASE2_REQUIRED: bool = False
     PHASE2_QUERY_TIMEOUT_SEC: int = 90
     THREAT_THRESHOLD_MEDIUM: int = 40
     THREAT_THRESHOLD_HIGH: int = 70

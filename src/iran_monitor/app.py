@@ -1001,9 +1001,15 @@ async def hourly_job(*, approval_required: bool = False, dry_run: bool = False) 
         notebook_context = await loop.run_in_executor(None, _upload_to_notebooklm, new_articles)
         if not notebook_context:
             flags.append("NOTEBOOK_UPLOAD_FAILED")
+            if settings.PHASE2_REQUIRED:
+                raise RuntimeError("NotebookLM upload failed in PHASE2_REQUIRED mode")
 
         analysis = await loop.run_in_executor(None, _analyze_phase2, new_articles, notebook_context)
         analysis = _apply_verification_gate(analysis, new_articles)
+        if settings.PHASE2_REQUIRED and str(analysis.get("analysis_source", "")).lower() != "notebooklm":
+            raise RuntimeError(
+                f"NotebookLM analysis required but got analysis_source={analysis.get('analysis_source')!r}"
+            )
         notebook_url = (notebook_context or {}).get("notebook_url")
 
         _inject_ai_analysis_into_hyie_state(analysis, notebook_url)
@@ -1071,6 +1077,8 @@ async def hourly_job(*, approval_required: bool = False, dry_run: bool = False) 
         )
         if settings.HEALTH_ALERT_ENABLED:
             await send_telegram_alert(f"⚠️ Iran-UAE Monitor 파이프라인 실패\n\n{type(exc).__name__}: {exc}")
+        if settings.PHASE2_REQUIRED:
+            raise
 
 
 async def main(*, approval_required: bool = False, dry_run: bool = False) -> None:

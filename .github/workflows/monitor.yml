@@ -32,14 +32,23 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
+      - name: Preflight NotebookLM required secret
+        env:
+          NLM_COOKIES_JSON: ${{ secrets.NLM_COOKIES_JSON }}
+        run: |
+          if [ -z "$NLM_COOKIES_JSON" ]; then
+            echo "::error::NLM_COOKIES_JSON is required for this workflow."
+            exit 1
+          fi
+
       - name: Restore NotebookLM auth profile
         env:
           NLM_COOKIES_JSON: ${{ secrets.NLM_COOKIES_JSON }}
           NLM_METADATA_JSON: ${{ secrets.NLM_METADATA_JSON }}
         run: |
           if [ -z "$NLM_COOKIES_JSON" ]; then
-            echo "NLM_COOKIES_JSON not set, skipping profile restore"
-            exit 0
+            echo "::error::NLM_COOKIES_JSON not set, cannot restore NotebookLM profile"
+            exit 1
           fi
           mkdir -p ~/.notebooklm-mcp-cli/profiles/default
           chmod 700 ~/.notebooklm-mcp-cli/profiles/default
@@ -74,9 +83,9 @@ jobs:
           HEADLESS: "true"
           LOG_LEVEL: "INFO"
 
-          # Phase 2 (NotebookLM): cloud default = false for stability.
-          # Override by setting secret PHASE2_ENABLED to "true".
-          PHASE2_ENABLED: ${{ secrets.PHASE2_ENABLED != '' && secrets.PHASE2_ENABLED || 'false' }}
+          # Phase 2 (NotebookLM): required mode
+          PHASE2_ENABLED: "true"
+          PHASE2_REQUIRED: "true"
           # Optional: set APPROVE_SEND=APPROVE_SEND when using non-interactive forced sending
           APPROVE_SEND: ${{ secrets.APPROVE_SEND || '' }}
         run: |
