@@ -1,0 +1,895 @@
+{
+  "checklist": [
+    {
+      "done": false,
+      "id": 1,
+      "text": "Bug-out bag (여권/ID/현금USD+AED/물2L/비상식량)"
+    },
+    {
+      "done": false,
+      "id": 2,
+      "text": "차량 연료 Full 확인"
+    },
+    {
+      "done": false,
+      "id": 3,
+      "text": "오만 보험 Orange Card 사전 구매"
+    },
+    {
+      "done": false,
+      "id": 4,
+      "text": "대사관 긴급번호 저장"
+    },
+    {
+      "done": false,
+      "id": 5,
+      "text": "Al Ain/Buraimi 루트 오프라인 맵"
+    },
+    {
+      "done": false,
+      "id": 6,
+      "text": "가족/회사 비상연락 완료"
+    },
+    {
+      "done": false,
+      "id": 7,
+      "text": "15분 단위 주요 소스 확인"
+    },
+    {
+      "done": false,
+      "id": 8,
+      "text": "SMS 공습경보 수신 확인"
+    }
+  ],
+  "degraded": false,
+  "delta_score": 0.239,
+  "effective_threshold": 0.681,
+  "egress_eta_source": "manual",
+  "egress_loss_eta": 10.0,
+  "evidence_conf": 0.843,
+  "flags": [],
+  "hypotheses": [
+    {
+      "id": "H0",
+      "name": "정상",
+      "score": 0.178
+    },
+    {
+      "id": "H1",
+      "name": "악화",
+      "score": 0.728
+    },
+    {
+      "id": "H2",
+      "name": "철수준비",
+      "score": 0.967
+    }
+  ],
+  "indicators": [
+    {
+      "confirmed": true,
+      "crossVerified": true,
+      "cv": true,
+      "detail": "US Embassy UAE: matched ordered departure, security alert, travel advisory, ordered departure | UK FCDO UAE Advice: matched do not travel, do not travel",
+      "id": "I01",
+      "name": "공식 여행경보/대사관 공지",
+      "src": "UAE Ministry of Foreign Affairs, UK FCDO UAE Advice, US Embassy UAE",
+      "srcCount": 3,
+      "src_count": 3,
+      "state": 0.92,
+      "tier": "TIER0",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    },
+    {
+      "confirmed": true,
+      "crossVerified": true,
+      "cv": true,
+      "detail": "Etihad Travel Updates: matched cancel, suspend, flight, cancel | Emirates Updates: matched cancel, suspend, disruption, flight",
+      "id": "I02",
+      "name": "공항/항공 운영",
+      "src": "Emirates Updates, Etihad Travel Updates, FlightAware News, Flightradar24 News",
+      "srcCount": 5,
+      "src_count": 5,
+      "state": 0.92,
+      "tier": "TIER0",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    },
+    {
+      "confirmed": true,
+      "crossVerified": true,
+      "cv": true,
+      "detail": "Al Jazeera Middle East: matched missile, drone, iran, missile | Reuters World: matched missile, drone, attack, uae attack",
+      "id": "I03",
+      "name": "군사/안보 근접도",
+      "src": "Al Jazeera Middle East, BBC World, Reuters World, UAE Ministry of Defence",
+      "srcCount": 4,
+      "src_count": 4,
+      "state": 0.68,
+      "tier": "TIER1",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    },
+    {
+      "confirmed": true,
+      "crossVerified": true,
+      "cv": true,
+      "detail": "Canada Travel Advisory UAE: matched avoid, advisory, avoid, security | Time Out Abu Dhabi: matched restricted, road, restricted",
+      "id": "I04",
+      "name": "치안/도로 통제",
+      "src": "Canada Travel Advisory UAE, Google Maps Traffic, Port of Fujairah, Saudi Public Security",
+      "srcCount": 8,
+      "src_count": 8,
+      "state": 0.68,
+      "tier": "TIER1",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    },
+    {
+      "confirmed": false,
+      "crossVerified": false,
+      "cv": false,
+      "detail": "Downdetector UAE: matched network, telecom, service, down | e& UAE: matched service",
+      "id": "I05",
+      "name": "통신/인프라",
+      "src": "AWS Service Health, Downdetector UAE, du UAE, e& UAE",
+      "srcCount": 4,
+      "src_count": 4,
+      "state": 0.552,
+      "tier": "TIER1",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    },
+    {
+      "confirmed": true,
+      "crossVerified": true,
+      "cv": true,
+      "detail": "ADNOC Distribution: matched price, fuel, stations, service | ENOC: matched price, fuel",
+      "id": "I06",
+      "name": "필수재/연료",
+      "src": "ADNOC Distribution, ENOC",
+      "srcCount": 2,
+      "src_count": 2,
+      "state": 0.56,
+      "tier": "TIER2",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    },
+    {
+      "confirmed": true,
+      "crossVerified": true,
+      "cv": true,
+      "detail": "US Embassy UAE: matched ordered departure, security alert, travel advisory, ordered departure | Nation Thailand: matched evacuation, evacuation, middle east, evacuation",
+      "id": "I07",
+      "name": "외국정부 행동",
+      "src": "FlightAware News, Flightradar24 News, NDTV World, Nation Thailand",
+      "srcCount": 6,
+      "src_count": 6,
+      "state": 0.92,
+      "tier": "TIER0",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00"
+    }
+  ],
+  "intel_feed": [
+    {
+      "impact": "I01, I07 updated (score=0.92)",
+      "priority": "CRITICAL",
+      "src": "US Embassy UAE",
+      "text": "US Embassy UAE: matched ordered departure, security alert, travel advisory, ordered departure",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I01 updated (score=0.92)",
+      "priority": "CRITICAL",
+      "src": "UK FCDO UAE Advice",
+      "text": "UK FCDO UAE Advice: matched do not travel, do not travel",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I02 updated (score=0.92)",
+      "priority": "CRITICAL",
+      "src": "Etihad Travel Updates",
+      "text": "Etihad Travel Updates: matched cancel, suspend, flight, cancel",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I02 updated (score=0.92)",
+      "priority": "CRITICAL",
+      "src": "Emirates Updates",
+      "text": "Emirates Updates: matched cancel, suspend, disruption, flight",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I01 updated (score=0.92)",
+      "priority": "CRITICAL",
+      "src": "UAE Ministry of Foreign Affairs",
+      "text": "UAE Ministry of Foreign Affairs: matched emergency, travel, security, emergency",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I03 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Al Jazeera Middle East",
+      "text": "Al Jazeera Middle East: matched missile, drone, iran, missile",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I03 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Reuters World",
+      "text": "Reuters World: matched missile, drone, attack, uae attack",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I03 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "BBC World",
+      "text": "BBC World: matched attack, drone, iran, attack",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Canada Travel Advisory UAE",
+      "text": "Canada Travel Advisory UAE: matched avoid, advisory, avoid, security",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Time Out Abu Dhabi",
+      "text": "Time Out Abu Dhabi: matched restricted, road, restricted",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "UAE NCEMA",
+      "text": "UAE NCEMA: matched emergency, warning, alert, emergency",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I07 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Nation Thailand",
+      "text": "Nation Thailand: matched evacuation, evacuation, middle east, evacuation",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I07, I02 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Flightradar24 News",
+      "text": "Flightradar24 News: matched airspace, airspace",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I06 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "ADNOC Distribution",
+      "text": "ADNOC Distribution: matched price, fuel, stations, service",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I06 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "ENOC",
+      "text": "ENOC: matched price, fuel",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.8)",
+      "priority": "HIGH",
+      "src": "Waze Live Map",
+      "text": "Waze Live Map: matched road closed, blocked, traffic, jam",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I05 updated (score=0.65)",
+      "priority": "MEDIUM",
+      "src": "Downdetector UAE",
+      "text": "Downdetector UAE: matched network, telecom, service, down",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I02 updated (score=0.59)",
+      "priority": "MEDIUM",
+      "src": "UAE GCAA",
+      "text": "UAE GCAA: matched flight, navigation",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I03 updated (score=0.59)",
+      "priority": "MEDIUM",
+      "src": "UAE Ministry of Defence",
+      "text": "UAE Ministry of Defence: matched operation, armed forces",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.53)",
+      "priority": "MEDIUM",
+      "src": "Port of Fujairah",
+      "text": "Port of Fujairah: matched operations, port, marine",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.53)",
+      "priority": "MEDIUM",
+      "src": "Saudi Public Security",
+      "text": "Saudi Public Security: matched border, security, closed",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I07 updated (score=0.47)",
+      "priority": "MEDIUM",
+      "src": "NDTV World",
+      "text": "NDTV World: matched uae, middle east",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I07 updated (score=0.47)",
+      "priority": "MEDIUM",
+      "src": "Rappler Philippines",
+      "text": "Rappler Philippines: matched middle east, philippine",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    },
+    {
+      "impact": "I04 updated (score=0.47)",
+      "priority": "MEDIUM",
+      "src": "Google Maps Traffic",
+      "text": "Google Maps Traffic: matched incident, border",
+      "ts": "2026-03-04T19:58:00+04:00",
+      "tsIso": "2026-03-04T19:58:00+04:00",
+      "verified": true
+    }
+  ],
+  "routes": [
+    {
+      "base_h": 7.0,
+      "congestion": 0.95,
+      "effective_h": 21.39,
+      "id": "A",
+      "name": "Al Ain → Buraimi → Sohar",
+      "note": "Al Ain congestion; Al Ain congestion; Al Ain congestion",
+      "status": "CAUTION"
+    },
+    {
+      "base_h": 8.2,
+      "congestion": 0.75,
+      "effective_h": 22.48,
+      "id": "B",
+      "name": "Mezyad → Nizwa",
+      "note": "Default route",
+      "status": "CAUTION"
+    },
+    {
+      "base_h": 15.5,
+      "congestion": 0.65,
+      "effective_h": 40.07,
+      "id": "C",
+      "name": "Saudi Ghuwaifat → Riyadh",
+      "note": "Default route",
+      "status": "BLOCKED"
+    },
+    {
+      "base_h": 9.3,
+      "congestion": 0.35,
+      "effective_h": 19.67,
+      "id": "D",
+      "name": "Fujairah → Khatmat → Muscat",
+      "note": "Default route",
+      "status": "BLOCKED"
+    }
+  ],
+  "slack_hours": -9.67,
+  "snapshot_ts": "2026-03-04T19:58:03+04:00",
+  "source_health": {
+    "tier0_emirates_updates": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Emirates 운항 상태 (DXB)",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Emirates Updates",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://www.emirates.com/ae/english/help/travel-updates/"
+    },
+    "tier0_etihad_updates": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Etihad 운항 상태 (AUH)",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Etihad Travel Updates",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://news.google.com/rss/search?q=site:etihad.com+travel+updates&hl=en-AE&gl=AE&ceid=AE:en"
+    },
+    "tier0_gcaa_notam": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE GCAA 항공 NOTAM",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "UAE GCAA",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://www.gcaa.gov.ae/en/Pages/default.aspx"
+    },
+    "tier0_kr_mofa_0404": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "한국 외교부 특보 문자/공지",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "KR MOFA 0404",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://overseas.mofa.go.kr/eng-en/index.do"
+    },
+    "tier0_uae_mod": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE 국방부 공식 발표",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "UAE Ministry of Defence",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://mod.gov.ae"
+    },
+    "tier0_uae_mofa": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE 정부 외교공지",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "UAE Ministry of Foreign Affairs",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://www.mofa.gov.ae/en/mediahub/news"
+    },
+    "tier0_uk_fcdo_uae": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UK FCDO 여행경보",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "UK FCDO UAE Advice",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://www.gov.uk/foreign-travel-advice/united-arab-emirates"
+    },
+    "tier0_us_embassy_uae": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "대사관 여행경보 레벨 변경",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "US Embassy UAE",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER0",
+      "url": "https://ae.usembassy.gov/u-s-citizen-services/"
+    },
+    "tier1_aljazeera_middle_east": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "이란 공격 보복 여부·규모",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Al Jazeera Middle East",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.aljazeera.com/news/middleeast/"
+    },
+    "tier1_aws_status": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "AWS UAE 리전 상태",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "AWS Service Health",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://status.aws.amazon.com/"
+    },
+    "tier1_azure_status": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Azure UAE 리전 상태",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Azure Status",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://azurestatuscdn.azureedge.net/en-us/status/feed/"
+    },
+    "tier1_bbc_world": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "이란 공격 보복 여부·규모",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "BBC World",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml"
+    },
+    "tier1_canada_uae_advisory": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE/사우디/오만 국경 상태",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "Canada Travel Advisory UAE",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://travel.gc.ca/destinations/united-arab-emirates"
+    },
+    "tier1_cnbc_middle_east": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "걸프 지역 폭발·경보 보고",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "CNBC Middle East",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.cnbc.com/middle-east/"
+    },
+    "tier1_cnn_breaking": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "걸프 지역 폭발·경보 보고",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "CNN Middle East",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.cnn.com/middleeast"
+    },
+    "tier1_downdetector_uae": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "통신망 장애 (Etisalat/du)",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Downdetector UAE",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.tdra.gov.ae/en/the-authority"
+    },
+    "tier1_du_status": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "통신망 장애 (du)",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "du UAE",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.du.ae/"
+    },
+    "tier1_etisalat_status": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "통신망 장애 (Etisalat)",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "e& UAE",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.etisalat.ae/en/"
+    },
+    "tier1_flightaware_news": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "다국적군 대피편 운항 정보",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "FlightAware News",
+      "ok": true,
+      "priority": "medium",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://blog.flightaware.com/"
+    },
+    "tier1_flightradar24": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "다국적군 대피편 운항 정보",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "Flightradar24 News",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.flightradar24.com/blog/"
+    },
+    "tier1_manila_times": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "필리핀 대피 현황",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "Rappler Philippines",
+      "ok": true,
+      "priority": "medium",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.rappler.com/world/middle-east/"
+    },
+    "tier1_nation_thailand": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "태국 대피 현황",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "Nation Thailand",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.nationthailand.com/"
+    },
+    "tier1_ncema_alerts": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "SMS 공습경보 시스템 가동 여부",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "UAE NCEMA",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.ncema.gov.ae/en/"
+    },
+    "tier1_ndtv_world": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "인도 대피 현황",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "NDTV World",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://feeds.feedburner.com/ndtvnews-world-news"
+    },
+    "tier1_reuters_world": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "이란 공격 보복 여부·규모",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Reuters World",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://news.google.com/rss/search?q=reuters+iran+uae+attack&hl=en-AE&gl=AE&ceid=AE:en"
+    },
+    "tier1_timeout_abudhabi": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE/사우디/오만 국경 상태",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "Time Out Abu Dhabi",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER1",
+      "url": "https://www.timeout.com/news"
+    },
+    "tier2_adnoc_distribution": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "연료 가격 (ADNOC)",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "ADNOC Distribution",
+      "ok": true,
+      "priority": "medium",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.adnocdistribution.ae/"
+    },
+    "tier2_enoc": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "연료 가격 (ENOC)",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "ENOC",
+      "ok": true,
+      "priority": "medium",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://news.google.com/rss/search?q=site:enoc.com+fuel+price+UAE&hl=en-AE&gl=AE&ceid=AE:en"
+    },
+    "tier2_google_maps_traffic": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Al Ain 국경 혼잡도",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Google Maps Traffic",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.google.com/maps"
+    },
+    "tier2_gulf_news": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "슈퍼마켓 품절 품목 보고",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "Gulf News",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://gulfnews.com/"
+    },
+    "tier2_khaleej_times": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE 연료·식료품 재고 상태",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "Khaleej Times",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.khaleejtimes.com/"
+    },
+    "tier2_oman_border": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Buraimi/Nizwa 국경 통과 시간",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "Royal Oman Police Border",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.rop.gov.om/"
+    },
+    "tier2_port_fujairah": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Fujairah 항구 상태",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "Port of Fujairah",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.fujairahport.ae/"
+    },
+    "tier2_saudi_border": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "사우디 국경 Ghuwaifat 상태",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "Saudi Public Security",
+      "ok": true,
+      "priority": "medium",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.spa.gov.sa/en"
+    },
+    "tier2_the_national": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE 연료·식료품 재고 상태",
+      "http_status": 200,
+      "interval_min": 60,
+      "name": "The National UAE",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.thenationalnews.com/uae/"
+    },
+    "tier2_uae_icp_border": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "UAE Border Authority",
+      "http_status": 200,
+      "interval_min": 30,
+      "name": "UAE ICP",
+      "ok": true,
+      "priority": "high",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://icp.gov.ae/en/"
+    },
+    "tier2_waze_live_map": {
+      "checked_at": "2026-03-04T19:58:00+04:00",
+      "collection_target": "Al Ain 국경 혼잡도",
+      "http_status": 200,
+      "interval_min": 15,
+      "name": "Waze Live Map",
+      "ok": true,
+      "priority": "critical",
+      "status": "ok",
+      "tier": "TIER2",
+      "url": "https://www.waze.com/live-map/"
+    }
+  },
+  "state_ts": "2026-03-04T19:58:03+04:00",
+  "state_version": "hyie-erc2-v2026.05",
+  "status": "ok",
+  "triggers": {
+    "air_update": true,
+    "border_change": true,
+    "comms_degraded": false,
+    "kr_leave_immediately": false,
+    "red_imminent": true,
+    "strike_detected": true
+  },
+  "urgency": 0.792,
+  "conflict_stats": {
+    "source": "fallback",
+    "conflict_day": 0
+  }
+}

@@ -1,0 +1,116 @@
+name: Iran-UAE Monitor (30m)
+
+on:
+  schedule:
+    # Every 30 minutes (UTC), offset from :00 to reduce queue contention.
+    - cron: '7,37 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  run-monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Restore NotebookLM auth profile
+        env:
+          NLM_COOKIES_JSON: ${{ secrets.NLM_COOKIES_JSON }}
+          NLM_METADATA_JSON: ${{ secrets.NLM_METADATA_JSON }}
+        run: |
+          if [ -z "$NLM_COOKIES_JSON" ]; then
+            echo "NLM_COOKIES_JSON not set, skipping profile restore"
+            exit 0
+          fi
+          mkdir -p ~/.notebooklm-mcp-cli/profiles/default
+          chmod 700 ~/.notebooklm-mcp-cli/profiles/default
+          echo "$NLM_COOKIES_JSON" > ~/.notebooklm-mcp-cli/profiles/default/cookies.json
+          chmod 600 ~/.notebooklm-mcp-cli/profiles/default/cookies.json
+          if [ -n "$NLM_METADATA_JSON" ]; then
+            echo "$NLM_METADATA_JSON" > ~/.notebooklm-mcp-cli/profiles/default/metadata.json
+            chmod 600 ~/.notebooklm-mcp-cli/profiles/default/metadata.json
+          fi
+          echo "NotebookLM profile restored."
+
+      - name: Run monitor once (canonical)
+        env:
+          # Telegram
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          # Twilio WhatsApp (optional)
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          WHATSAPP_RECIPIENTS: ${{ secrets.WHATSAPP_RECIPIENTS }}
+
+          # Storage backend (Phase 4)
+          # - If DATABASE_URL is set, backend auto switches to 'postgres'.
+          # - If empty, it stays sqlite (local file).
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STORAGE_BACKEND: ${{ secrets.STORAGE_BACKEND }}
+          STORAGE_ENABLED: "true"
+
+          # Runtime
+          HEADLESS: "true"
+          LOG_LEVEL: "INFO"
+
+          # Phase 2 (NotebookLM): cloud default = false for stability.
+          # Override by setting secret PHASE2_ENABLED to "true".
+          PHASE2_ENABLED: ${{ secrets.PHASE2_ENABLED != '' && secrets.PHASE2_ENABLED || 'false' }}
+          # Optional: set APPROVE_SEND=APPROVE_SEND when using non-interactive forced sending
+          APPROVE_SEND: ${{ secrets.APPROVE_SEND || '' }}
+        run: |
+          python scripts/run_now.py --telegram-send
+
+      - name: Publish hyie_state.json to urgentdash-live branch
+        if: always()
+        run: |
+          if [ ! -f state/hyie_state.json ]; then
+            echo "state/hyie_state.json not found, skipping publish"
+            exit 0
+          fi
+          cp state/hyie_state.json /tmp/hyie_state.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin urgentdash-live
+          git checkout urgentdash-live
+          mkdir -p live
+          cp /tmp/hyie_state.json live/hyie_state.json
+          git add live/hyie_state.json
+          git diff --cached --quiet && echo "No changes" || \
+            git commit -m "chore: update hyie_state.json [skip ci]" && \
+            git push origin urgentdash-live
+          echo "Published hyie_state.json to urgentdash-live branch"
+
+      - name: Upload artifacts (reports/state/ledger) for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-artifacts-${{ github.run_id }}
+          path: |
+            reports
+            state
+            ledger
+            .health_state.json
+          if-no-files-found: ignore
+          retention-days: 7
