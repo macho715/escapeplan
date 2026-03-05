@@ -83,9 +83,8 @@ jobs:
           HEADLESS: "true"
           LOG_LEVEL: "INFO"
 
-          # Phase 2 (NotebookLM): required mode
+          # Phase 2 (NotebookLM): enabled; falls back to rule-based analysis on upload failure.
           PHASE2_ENABLED: "true"
-          PHASE2_REQUIRED: "true"
           # Optional: set APPROVE_SEND=APPROVE_SEND when using non-interactive forced sending
           APPROVE_SEND: ${{ secrets.APPROVE_SEND || '' }}
         run: |
