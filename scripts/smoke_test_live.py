@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +69,22 @@ def _load_json_url(url: str, timeout: float = 20.0) -> dict:
     payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise ValueError(f"JSON object required: {url}")
+    return payload
+
+
+def _load_json_git_ref(ref: str, path: str) -> dict:
+    proc = subprocess.run(
+        ["git", "show", f"{ref}:{path}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(f"git show failed for {ref}:{path}: {detail}")
+    payload = json.loads(proc.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError(f"JSON object required: {ref}:{path}")
     return payload
 
 
@@ -147,6 +164,16 @@ def _normalize_latest_payload(payload: dict) -> dict:
     }
 
 
+def _infer_git_branch_from_latest_url(latest_url: str) -> str:
+    parsed = urlparse(latest_url)
+    if parsed.netloc != "raw.githubusercontent.com":
+        return ""
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 5 or parts[-1] != "latest.json" or parts[-2] != "live":
+        return ""
+    return "/".join(parts[2:-2]).strip()
+
+
 def _fetch_json_with_retry(url: str, retries: int, sleep_seconds: float, label: str) -> dict:
     last_error: Exception | None = None
     for attempt in range(1, retries + 1):
@@ -160,6 +187,25 @@ def _fetch_json_with_retry(url: str, retries: int, sleep_seconds: float, label: 
     raise RuntimeError(f"{label} fetch failed after {retries} attempt(s): {last_error}") from last_error
 
 
+def _fetch_git_json_with_retry(ref: str, path: str, branch: str, retries: int, sleep_seconds: float, label: str) -> dict:
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            subprocess.run(
+                ["git", "fetch", "origin", branch, "--depth", "1"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return _load_json_git_ref(ref, path)
+        except (subprocess.CalledProcessError, RuntimeError, ValueError, json.JSONDecodeError, OSError) as exc:
+            last_error = exc
+            if attempt == retries:
+                break
+            time.sleep(sleep_seconds * attempt)
+    raise RuntimeError(f"{label} git fetch failed after {retries} attempt(s): {last_error}") from last_error
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test published live payloads")
     parser.add_argument(
@@ -171,6 +217,11 @@ def main() -> int:
         "--health-file",
         default=str(_storage_root() / settings.HEALTH_STATE_FILE),
         help="Path to local health state file to update",
+    )
+    parser.add_argument(
+        "--git-branch",
+        default="",
+        help="Optional branch name to validate via git fetch/show instead of raw CDN reads",
     )
     parser.add_argument(
         "--max-age-seconds",
@@ -196,20 +247,58 @@ def main() -> int:
     latest_payload: dict | None = None
 
     try:
-        raw_latest = _fetch_json_with_retry(args.latest_url, args.retries, args.retry_sleep_seconds, "latest")
+        git_branch = args.git_branch.strip() or _infer_git_branch_from_latest_url(args.latest_url)
+        git_ref = f"origin/{git_branch}" if git_branch else ""
+        if git_ref:
+            try:
+                raw_latest = _fetch_git_json_with_retry(
+                    git_ref,
+                    "live/latest.json",
+                    git_branch,
+                    args.retries,
+                    args.retry_sleep_seconds,
+                    "latest",
+                )
+            except RuntimeError:
+                if args.git_branch:
+                    raise
+                git_ref = ""
+                raw_latest = _fetch_json_with_retry(args.latest_url, args.retries, args.retry_sleep_seconds, "latest")
+        else:
+            raw_latest = _fetch_json_with_retry(args.latest_url, args.retries, args.retry_sleep_seconds, "latest")
         latest_payload = _normalize_latest_payload(raw_latest)
         _assert_fresh(latest_payload.get("publishedAt"), max_age_seconds=args.max_age_seconds, label="latest.publishedAt")
         _assert_fresh(latest_payload.get("stateTs"), max_age_seconds=args.max_age_seconds, label="latest.stateTs")
 
-        lite_url = urljoin(args.latest_url, latest_payload["litePath"])
-        lite_payload = _fetch_json_with_retry(lite_url, args.retries, args.retry_sleep_seconds, "state-lite")
+        if git_ref:
+            lite_payload = _fetch_git_json_with_retry(
+                git_ref,
+                f"live/{latest_payload['litePath']}",
+                args.git_branch,
+                args.retries,
+                args.retry_sleep_seconds,
+                "state-lite",
+            )
+        else:
+            lite_url = urljoin(args.latest_url, latest_payload["litePath"])
+            lite_payload = _fetch_json_with_retry(lite_url, args.retries, args.retry_sleep_seconds, "state-lite")
         _assert_keys(lite_payload, STATE_REQUIRED_KEYS, "state-lite.json")
         _assert_fresh(lite_payload.get("state_ts"), max_age_seconds=args.max_age_seconds, label="state-lite.state_ts")
 
         ai_path = latest_payload["aiPath"]
         if ai_path:
-            ai_url = urljoin(args.latest_url, ai_path)
-            ai_payload = _fetch_json_with_retry(ai_url, args.retries, args.retry_sleep_seconds, "state-ai")
+            if git_ref:
+                ai_payload = _fetch_git_json_with_retry(
+                    git_ref,
+                    f"live/{ai_path}",
+                    git_branch,
+                    args.retries,
+                    args.retry_sleep_seconds,
+                    "state-ai",
+                )
+            else:
+                ai_url = urljoin(args.latest_url, ai_path)
+                ai_payload = _fetch_json_with_retry(ai_url, args.retries, args.retry_sleep_seconds, "state-ai")
             if not isinstance(ai_payload.get("ai_analysis"), dict):
                 raise ValueError("state-ai.json missing ai_analysis")
             if not str(ai_payload.get("version") or latest_payload["version"]).strip():

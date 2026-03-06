@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -77,6 +78,40 @@ class SmokeTestLiveTests(unittest.TestCase):
         self.assertEqual(payload, {"ok": True})
         self.assertEqual(load_mock.call_count, 3)
         self.assertEqual(sleep_mock.call_count, 2)
+
+    def test_fetch_git_json_with_retry_fetches_branch_and_retries(self) -> None:
+        responses = [RuntimeError("not yet visible"), {"ok": True}]
+
+        def fake_git_load(ref: str, path: str):
+            result = responses.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        with patch.object(smoke_test_live, "_load_json_git_ref", side_effect=fake_git_load) as load_mock:
+            with patch.object(smoke_test_live.subprocess, "run") as run_mock:
+                with patch.object(smoke_test_live.time, "sleep") as sleep_mock:
+                    run_mock.return_value = subprocess.CompletedProcess(args=["git"], returncode=0)
+                    payload = smoke_test_live._fetch_git_json_with_retry(
+                        "origin/urgentdash-live",
+                        "live/latest.json",
+                        "urgentdash-live",
+                        retries=2,
+                        sleep_seconds=0.1,
+                        label="latest",
+                    )
+
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(load_mock.call_count, 2)
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(sleep_mock.call_count, 1)
+
+    def test_infer_git_branch_from_raw_latest_url(self) -> None:
+        branch = smoke_test_live._infer_git_branch_from_latest_url(
+            "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/latest.json"
+        )
+
+        self.assertEqual(branch, "urgentdash-live")
 
 
 if __name__ == "__main__":
