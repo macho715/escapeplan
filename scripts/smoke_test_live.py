@@ -21,15 +21,6 @@ if str(ROOT / "src") not in sys.path:
 
 from src.iran_monitor.config import settings
 
-LATEST_REQUIRED_KEYS = {
-    "version",
-    "publishedAt",
-    "stateTs",
-    "status",
-    "degraded",
-    "litePath",
-}
-
 STATE_REQUIRED_KEYS = {
     "state_ts",
     "status",
@@ -123,17 +114,50 @@ def _assert_fresh(ts_value: str | None, *, max_age_seconds: int, label: str) -> 
         raise ValueError(f"{label} too old: age={int(age)}s > {max_age_seconds}s")
 
 
-def _fetch_latest_with_retry(url: str, retries: int, sleep_seconds: float) -> dict:
+def _normalize_latest_payload(payload: dict) -> dict:
+    version = str(payload.get("version") or "").strip()
+    published_at = str(payload.get("publishedAt") or payload.get("collectedAt") or "").strip()
+    state_ts = str(payload.get("stateTs") or payload.get("state_ts") or "").strip()
+    lite_path = str(payload.get("litePath") or payload.get("liteUrl") or "").strip()
+    ai_path = str(payload.get("aiPath") or payload.get("aiUrl") or "").strip()
+    ai_version = str(payload.get("aiVersion") or "").strip()
+
+    missing = []
+    if not version:
+        missing.append("version")
+    if not published_at:
+        missing.append("publishedAt|collectedAt")
+    if not state_ts:
+        missing.append("stateTs")
+    if not lite_path:
+        missing.append("litePath|liteUrl")
+    if missing:
+        raise ValueError(f"latest.json missing required keys: {', '.join(missing)}")
+
+    if bool(ai_path) != bool(ai_version):
+        raise ValueError("latest.json ai path/version mismatch")
+
+    return {
+        "version": version,
+        "publishedAt": published_at,
+        "stateTs": state_ts,
+        "litePath": lite_path,
+        "aiPath": ai_path,
+        "aiVersion": ai_version,
+    }
+
+
+def _fetch_json_with_retry(url: str, retries: int, sleep_seconds: float, label: str) -> dict:
     last_error: Exception | None = None
     for attempt in range(1, retries + 1):
         try:
             return _load_json_url(url)
-        except (HTTPError, URLError, ValueError, json.JSONDecodeError) as exc:
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
             last_error = exc
             if attempt == retries:
                 break
             time.sleep(sleep_seconds * attempt)
-    raise RuntimeError(f"latest fetch failed after {retries} attempt(s): {last_error}") from last_error
+    raise RuntimeError(f"{label} fetch failed after {retries} attempt(s): {last_error}") from last_error
 
 
 def main() -> int:
@@ -158,7 +182,7 @@ def main() -> int:
         "--retries",
         type=int,
         default=5,
-        help="Number of fetch retries for latest.json",
+        help="Number of fetch retries for published JSON",
     )
     parser.add_argument(
         "--retry-sleep-seconds",
@@ -172,26 +196,24 @@ def main() -> int:
     latest_payload: dict | None = None
 
     try:
-        latest_payload = _fetch_latest_with_retry(args.latest_url, args.retries, args.retry_sleep_seconds)
-        _assert_keys(latest_payload, LATEST_REQUIRED_KEYS, "latest.json")
+        raw_latest = _fetch_json_with_retry(args.latest_url, args.retries, args.retry_sleep_seconds, "latest")
+        latest_payload = _normalize_latest_payload(raw_latest)
+        _assert_fresh(latest_payload.get("publishedAt"), max_age_seconds=args.max_age_seconds, label="latest.publishedAt")
         _assert_fresh(latest_payload.get("stateTs"), max_age_seconds=args.max_age_seconds, label="latest.stateTs")
 
-        lite_url = urljoin(args.latest_url, str(latest_payload["litePath"]))
-        lite_payload = _load_json_url(lite_url)
+        lite_url = urljoin(args.latest_url, latest_payload["litePath"])
+        lite_payload = _fetch_json_with_retry(lite_url, args.retries, args.retry_sleep_seconds, "state-lite")
         _assert_keys(lite_payload, STATE_REQUIRED_KEYS, "state-lite.json")
         _assert_fresh(lite_payload.get("state_ts"), max_age_seconds=args.max_age_seconds, label="state-lite.state_ts")
 
-        ai_path = str(latest_payload.get("aiPath") or "").strip()
-        ai_version = str(latest_payload.get("aiVersion") or "").strip()
-        if ai_path or ai_version:
-            if not ai_path or not ai_version:
-                raise ValueError("latest.json aiPath/aiVersion mismatch")
+        ai_path = latest_payload["aiPath"]
+        if ai_path:
             ai_url = urljoin(args.latest_url, ai_path)
-            ai_payload = _load_json_url(ai_url)
+            ai_payload = _fetch_json_with_retry(ai_url, args.retries, args.retry_sleep_seconds, "state-ai")
             if not isinstance(ai_payload.get("ai_analysis"), dict):
                 raise ValueError("state-ai.json missing ai_analysis")
-            if not str(ai_payload.get("source_version") or "").strip():
-                raise ValueError("state-ai.json missing source_version")
+            if not str(ai_payload.get("version") or latest_payload["version"]).strip():
+                raise ValueError("state-ai.json missing version")
 
         _update_health(health_file, status="ok", latest=latest_payload, error=None)
         print(f"Smoke test passed: {args.latest_url}")
