@@ -4,18 +4,22 @@ export const STORAGE_KEYS = {
   egress: "urgentdash.egressLossETA",
   history: "urgentdash.history.v1",
   timeline: "urgentdash.timeline.v1",
-  autoSummary: "urgentdash.autoSummary.v1"
+  autoSummary: "urgentdash.autoSummary.v1",
+  notifications: "urgentdash.notif.v1",
+  sound: "urgentdash.sound.v1",
+  theme: "urgentdash.theme.v1"
 };
 
 export const HISTORY_MAX_POINTS = 96;
 export const TIMELINE_MAX = 220;
 
 export const POLL_INTERVAL_MS = 30 * 60 * 1000;
-export const FULL_SYNC_INTERVAL_MS = POLL_INTERVAL_MS;
 export const FAST_POLL_MS_DEFAULT = 30 * 1000;
 export const FAST_COUNTDOWN_SECONDS = 30;
 export const COUNTDOWN_SECONDS = FAST_COUNTDOWN_SECONDS;
-export const LIVE_STALE_THRESHOLD_SECONDS = 2400; // 40분 SLA (GHA 30분 + 10분 여유)
+export const LIVE_STALE_THRESHOLD_SECONDS = 2100; // 35분 (GHA 30분 주기 + 5분 여유)
+export const LIVE_STALE_SEVERE_THRESHOLD_SECONDS = 3600;
+export const LIVE_STALE_CRITICAL_THRESHOLD_SECONDS = 7200;
 
 export const MIN_EVIDENCE_SOURCES = 2;
 export const FALLBACK_EGRESS_LOSS_ETA = 10;
@@ -39,9 +43,17 @@ export const I02_SEGMENTS = [
 
 export const SNAPSHOT_REQUIRED_KEYS = ["intel_feed", "indicators", "hypotheses", "routes", "checklist"];
 
+export const DEFAULT_LATEST_CANDIDATES = [
+  "http://127.0.0.1:8000/api/live/latest",
+  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/latest.json",
+  "/api/live/latest",
+  "./api/live/latest",
+  "api/live/latest"
+];
+
 export const DEFAULT_DASHBOARD_CANDIDATES = [
-  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/hyie_state.json",
   "http://127.0.0.1:8000/api/state",
+  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/hyie_state.json",
   "/api/state",
   "./api/state",
   "api/state",
@@ -49,12 +61,23 @@ export const DEFAULT_DASHBOARD_CANDIDATES = [
 ];
 
 export const DEFAULT_FAST_STATE_CANDIDATES = [
-  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/hyie_state.json",
   "http://127.0.0.1:8000/api/state",
+  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/hyie_state.json",
   "/api/state",
   "./api/state",
   "api/state"
 ];
+
+export function getLatestCandidates() {
+  const env = import.meta?.env?.VITE_LATEST_CANDIDATES;
+  if (typeof env === "string" && env.trim()) {
+    return env
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return DEFAULT_LATEST_CANDIDATES;
+}
 
 export function getDashboardCandidates() {
   const env = import.meta?.env?.VITE_DASHBOARD_CANDIDATES;

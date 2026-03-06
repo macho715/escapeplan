@@ -140,7 +140,7 @@ export default function RouteMapLeaflet({
         </div>
       </div>
 
-      <div style={{ height: 360, borderRadius: 14, overflow: "hidden", border: "1px solid #1e293b" }}>
+      <div className="route-map">
         <MapContainer center={center} zoom={7} scrollWheelZoom style={{ width: "100%", height: "100%" }}>
           <TileLayer url={tileUrl} attribution={tileAttr} />
           <MapClickHandler onSelect={onSelect} />

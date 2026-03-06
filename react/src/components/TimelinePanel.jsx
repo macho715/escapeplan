@@ -13,13 +13,13 @@ export default function TimelinePanel({ timeline = [], onClear, onExport }) {
         <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={onClear}
-            style={{ background: "#0b1220", border: "1px solid #1e293b", color: "#94a3b8", borderRadius: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+            className="action-button action-button--muted"
           >
             Clear
           </button>
           <button
             onClick={onExport}
-            style={{ background: "#0b1220", border: "1px solid #1e293b", color: "#e2e8f0", borderRadius: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+            className="action-button"
           >
             Export
           </button>
@@ -36,13 +36,8 @@ export default function TimelinePanel({ timeline = [], onClear, onExport }) {
             return (
               <div
                 key={ev.id || idx}
-                style={{
-                  background: "#0b1220",
-                  border: "1px solid #1e293b",
-                  borderLeft: `4px solid ${color}`,
-                  borderRadius: 10,
-                  padding: 12
-                }}
+                className="timeline-item"
+                style={{ borderLeft: `4px solid ${color}` }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 10, color: "#64748b" }}>{ts}</span>

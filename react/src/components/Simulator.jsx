@@ -93,7 +93,7 @@ export default function Simulator({ liveDash, onLog = () => {} }) {
   const routeStatusColor = (st) => (st === "BLOCKED" ? "#ef4444" : st === "CAUTION" ? "#f59e0b" : "#22c55e");
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 10 }}>
+    <div className="sim-grid">
       <Card style={{ marginBottom: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
           <div>

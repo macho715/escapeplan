@@ -1,26 +1,26 @@
 import React from "react";
 
-export function Card({ children, style }) {
+export function Card({ children, style, className = "" }) {
   return (
-    <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 14, padding: 16, marginBottom: 12, ...style }}>
+    <div className={`card-shell ${className}`.trim()} style={style}>
       {children}
     </div>
   );
 }
 
-export function Pill({ label, value, color = "#94a3b8" }) {
+export function Pill({ label, value, color = "#94a3b8", className = "" }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#0b1220", border: "1px solid #1e293b", borderRadius: 999, padding: "6px 10px" }}>
-      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 800 }}>{label}</div>
-      <div style={{ fontSize: 11, color, fontWeight: 900, fontFamily: "monospace" }}>{value}</div>
+    <div className={`pill ${className}`.trim()}>
+      <div className="pill__label">{label}</div>
+      <div className="pill__value" style={{ color }}>{value}</div>
     </div>
   );
 }
 
-export function Bar({ value = 0, color = "#22c55e", h = 8 }) {
+export function Bar({ value = 0, color = "#22c55e", h = 8, className = "" }) {
   const v = Math.max(0, Math.min(1, Number(value) || 0));
   return (
-    <div style={{ height: h, background: "#111827", borderRadius: 999, overflow: "hidden", border: "1px solid #1e293b" }}>
+    <div className={`bar-track ${className}`.trim()} style={{ height: h }}>
       <div style={{ width: `${v * 100}%`, height: "100%", background: color }} />
     </div>
   );

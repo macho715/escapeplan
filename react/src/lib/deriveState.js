@@ -2,6 +2,8 @@ import {
   EVIDENCE_FLOOR_T0_TARGET,
   I02_SEGMENTS,
   FALLBACK_EGRESS_LOSS_ETA,
+  LIVE_STALE_CRITICAL_THRESHOLD_SECONDS,
+  LIVE_STALE_SEVERE_THRESHOLD_SECONDS,
   LIVE_STALE_THRESHOLD_SECONDS
 } from "./constants.js";
 import { clamp01, clampEgress, safeNumber, truncate } from "./utils.js";
@@ -86,8 +88,17 @@ export function deriveState(dash, egressLossETAOverride) {
     ? Math.max(0, Math.floor((Date.now() - stateTsMs) / 1000))
     : null;
   const liveStale = Number.isFinite(liveLagSeconds)
-    ? liveLagSeconds > LIVE_STALE_THRESHOLD_SECONDS
+    ? liveLagSeconds >= LIVE_STALE_THRESHOLD_SECONDS
     : false;
+  const staleSeverity = !Number.isFinite(liveLagSeconds)
+    ? "UNKNOWN"
+    : liveLagSeconds >= LIVE_STALE_CRITICAL_THRESHOLD_SECONDS
+      ? "CRITICAL"
+      : liveLagSeconds >= LIVE_STALE_SEVERE_THRESHOLD_SECONDS
+        ? "SEVERE"
+        : liveLagSeconds >= LIVE_STALE_THRESHOLD_SECONDS
+          ? "STALE"
+          : "FRESH";
 
   const sourceOk = dash?.metadata?.sourceOk;
   const sourceTotal = dash?.metadata?.sourceTotal;
@@ -138,7 +149,7 @@ export function deriveState(dash, egressLossETAOverride) {
     evidenceFloorT0, evidenceFloorPassed,
     urgencyScore,
     conflictStats, conflictDayLabel, conflictSourceLabel,
-    liveLagSeconds, liveStale,
+    liveLagSeconds, liveStale, staleSeverity,
     sourceHealthLabel, liveSource,
     dsGapLabel, dsStateIcon, dsActionLabel, confDeltaLabel,
     escalationItems, deEscalationItems

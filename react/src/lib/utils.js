@@ -106,6 +106,15 @@ export function deepClone(obj) {
 export function downloadJson(filename, dataObj) {
   const json = JSON.stringify(dataObj, null, 2);
   const blob = new Blob([json], { type: "application/json" });
+  downloadBlob(filename, blob);
+}
+
+export function downloadText(filename, text) {
+  const blob = new Blob([String(text || "")], { type: "text/plain;charset=utf-8" });
+  downloadBlob(filename, blob);
+}
+
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -146,4 +155,10 @@ export function truncate(s, max = 140) {
   const t = normalizeWhitespace(s);
   if (t.length <= max) return t;
   return t.slice(0, max - 1) + "…";
+}
+
+export function isEditableTarget(target) {
+  if (!target || typeof target !== "object") return false;
+  const tagName = typeof target.tagName === "string" ? target.tagName.toUpperCase() : "";
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT" || target.isContentEditable === true;
 }

@@ -31,3 +31,71 @@ export function buildOfflineSummary(dash, derived) {
 
   return lines.join("\n");
 }
+
+export function buildFullReport(dash, derived) {
+  const intelFeed = dash.intelFeed || [];
+  const routes = (dash.routes || []).map((route) => ({
+    ...route,
+    eff: route.base_h * (1 + (route.cong ?? route.congestion ?? 0)) * ROUTE_BUFFER_FACTOR
+  }));
+  const indicators = (dash.indicators || []).slice(0, 6);
+  const checklist = dash.checklist || [];
+  const aiSummary = dash.aiAnalysis?.summary || "";
+
+  const lines = [
+    "UrgentDash Situation Report",
+    `Generated: ${formatDateTimeGST(new Date())} GST`,
+    "",
+    `MODE: ${derived.modeState}`,
+    `Gate: ${derived.gateState}`,
+    `Airspace: ${derived.airspaceState} (${derived.airspaceSegment})`,
+    `Evidence: ${derived.evidenceState} / Conf=${derived.ec.toFixed(3)} / Thr=${derived.effectiveThreshold.toFixed(3)}`,
+    `Likelihood: ${derived.likelihoodLabel} (${derived.likelihoodBand})`,
+    `Urgency: ${derived.urgencyScore.toFixed(2)}`,
+    `Live source: ${derived.liveSource} / Health=${derived.sourceHealthLabel}`,
+    ""
+  ];
+
+  if (indicators.length) {
+    lines.push("Indicators:");
+    indicators.forEach((indicator) => {
+      lines.push(`- ${indicator.id} ${indicator.name}: ${indicator.state.toFixed(2)} / ${indicator.tier} / ${indicator.cv ? "cv" : "partial"}`);
+    });
+    lines.push("");
+  }
+
+  if (routes.length) {
+    lines.push("Routes:");
+    routes.forEach((route) => {
+      lines.push(`- Route ${route.id} ${route.status} ~${route.eff.toFixed(1)}h | ${route.name}`);
+    });
+    lines.push("");
+  }
+
+  if (intelFeed.length) {
+    lines.push("Latest Intel:");
+    intelFeed.forEach((item, index) => {
+      lines.push(`${index + 1}. [${item.priority}] ${item.text}`);
+    });
+    lines.push("");
+  }
+
+  if (aiSummary) {
+    lines.push("AI Summary:");
+    lines.push(aiSummary);
+    lines.push("");
+  }
+
+  if (checklist.length) {
+    const doneCount = checklist.filter((item) => item.done).length;
+    lines.push(`Checklist: ${doneCount}/${checklist.length} complete`);
+    checklist.forEach((item) => {
+      lines.push(`- [${item.done ? "x" : " "}] ${item.text}`);
+    });
+    lines.push("");
+  }
+
+  lines.push("Offline Summary:");
+  lines.push(buildOfflineSummary(dash, derived));
+  return lines.join("\n");
+}
