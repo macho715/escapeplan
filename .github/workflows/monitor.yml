@@ -45,20 +45,39 @@ jobs:
         env:
           NLM_COOKIES_JSON: ${{ secrets.NLM_COOKIES_JSON }}
           NLM_METADATA_JSON: ${{ secrets.NLM_METADATA_JSON }}
+          NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
         run: |
           if [ -z "$NLM_COOKIES_JSON" ]; then
             echo "::error::NLM_COOKIES_JSON not set, cannot restore NotebookLM profile"
             exit 1
           fi
-          mkdir -p ~/.notebooklm-mcp-cli/profiles/default
-          chmod 700 ~/.notebooklm-mcp-cli/profiles/default
-          echo "$NLM_COOKIES_JSON" > ~/.notebooklm-mcp-cli/profiles/default/cookies.json
-          chmod 600 ~/.notebooklm-mcp-cli/profiles/default/cookies.json
+          mkdir -p "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default"
+          chmod 700 "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default"
+          echo "$NLM_COOKIES_JSON" > "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default/cookies.json"
+          chmod 600 "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default/cookies.json"
           if [ -n "$NLM_METADATA_JSON" ]; then
-            echo "$NLM_METADATA_JSON" > ~/.notebooklm-mcp-cli/profiles/default/metadata.json
-            chmod 600 ~/.notebooklm-mcp-cli/profiles/default/metadata.json
+            echo "$NLM_METADATA_JSON" > "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default/metadata.json"
+            chmod 600 "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default/metadata.json"
           fi
           echo "NotebookLM profile restored."
+
+      - name: Validate NotebookLM auth profile
+        env:
+          NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
+        run: |
+          python - <<'PY'
+          from notebooklm_tools.core.auth import AuthManager
+          from notebooklm_tools.core.client import NotebookLMClient
+
+          profile = AuthManager().load_profile()
+          with NotebookLMClient(
+              cookies=profile.cookies,
+              csrf_token=profile.csrf_token,
+              session_id=profile.session_id,
+          ) as client:
+              notebooks = client.list_notebooks()
+          print(f"NotebookLM auth validated. notebooks={len(notebooks)}")
+          PY
 
       - name: Run monitor once (canonical)
         env:
@@ -82,6 +101,7 @@ jobs:
           # Runtime
           HEADLESS: "true"
           LOG_LEVEL: "INFO"
+          NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
 
           # Phase 2 (NotebookLM): enabled; falls back to rule-based analysis on upload failure.
           PHASE2_ENABLED: "true"
