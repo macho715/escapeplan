@@ -56,6 +56,14 @@ export const DEFAULT_FAST_STATE_CANDIDATES = [
   "api/state"
 ];
 
+export const DEFAULT_LATEST_POINTER_CANDIDATES = [
+  "https://raw.githubusercontent.com/macho715/escapeplan/urgentdash-live/live/latest.json",
+  "http://127.0.0.1:3000/live/latest.json",
+  "/live/latest.json",
+  "./live/latest.json",
+  "live/latest.json"
+];
+
 export function getDashboardCandidates() {
   const env = import.meta?.env?.VITE_DASHBOARD_CANDIDATES;
   if (typeof env === "string" && env.trim()) {
@@ -76,4 +84,15 @@ export function getFastStateCandidates() {
       .filter(Boolean);
   }
   return DEFAULT_FAST_STATE_CANDIDATES;
+}
+
+export function getLatestPointerCandidates() {
+  const env = import.meta?.env?.VITE_LATEST_POINTER_CANDIDATES;
+  if (typeof env === "string" && env.trim()) {
+    return env
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return DEFAULT_LATEST_POINTER_CANDIDATES;
 }

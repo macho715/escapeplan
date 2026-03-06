@@ -60,6 +60,18 @@ def health():
         "last_article_count": data.get("last_article_count", data.get("counts", {}).get("new_count")),
         "counts": data.get("counts") or {},
         "last_error": data.get("last_error"),
+        "last_scrape_success_at": data.get("last_scrape_success_at"),
+        "last_state_success_at": data.get("last_state_success_at"),
+        "last_ai_success_at": data.get("last_ai_success_at"),
+        "last_publish_success_at": data.get("last_publish_success_at"),
+        "current_version": data.get("current_version"),
+        "published_version": data.get("published_version"),
+        "ai_mode": data.get("ai_mode"),
+        "ai_version": data.get("ai_version"),
+        "source_lag_seconds": data.get("source_lag_seconds"),
+        "degraded_reasons": data.get("degraded_reasons") or [],
+        "last_smoke_test_at": data.get("last_smoke_test_at"),
+        "last_smoke_test_status": data.get("last_smoke_test_status"),
     }
 
 

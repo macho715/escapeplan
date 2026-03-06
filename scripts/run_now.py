@@ -23,13 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--telegram-send", action="store_true", help="Skip approval gate and send immediately")
     parser.add_argument("--json-archive", action="store_true", help="Force JSON archive on")
     parser.add_argument("--json-archive-off", action="store_true", help="Force JSON archive off")
+    parser.add_argument("--mode", choices=["full", "lite", "ai"], default="full", help="Select delivery mode")
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
     json_archive = True if args.json_archive else (False if args.json_archive_off else None)
-    _run_once(telegram_send=args.telegram_send, dry_run=args.dry_run, json_archive=json_archive)
+    _run_once(telegram_send=args.telegram_send, dry_run=args.dry_run, json_archive=json_archive, mode=args.mode)
     return 0
 
 

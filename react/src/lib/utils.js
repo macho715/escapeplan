@@ -147,3 +147,13 @@ export function truncate(s, max = 140) {
   if (t.length <= max) return t;
   return t.slice(0, max - 1) + "…";
 }
+
+export function resolveRelativeUrl(base, next) {
+  const target = String(next || "").trim();
+  if (!target) return "";
+  try {
+    return new URL(target, base).toString();
+  } catch {
+    return target;
+  }
+}

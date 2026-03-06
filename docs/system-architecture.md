@@ -1,38 +1,88 @@
 # System Architecture
 
-UrgentDash Independent — HYIE 전황 실시간 모니터링. 30분 주기 업데이트. 정보 소스: NotebookLM.
+UrgentDash Independent는 HYIE 전황 상태 생성과 AI 분석 주입을 분리한 delivery path를 기준으로 운영한다.
 
 ---
 
 ## 개요
 
-- **목적**: Iran-UAE 전황 모니터링, 대시보드 상태 제공
-- **업데이트**: 30분마다 (GHA cron 7, 37분)
-- **스택**: Python 3.11+, FastAPI, NotebookLM, React, SQLite/Postgres
+- 목적: Iran-UAE 전황 모니터링과 대시보드 상태 제공
+- 업데이트: GitHub Actions 15분 overschedule, 25분 freshness gate
+- 스택: Python 3.11+, FastAPI, React, NotebookLM, SQLite/Postgres
+- 배포 채널: `urgentdash-live` 브랜치 + GitHub Raw + React SPA
 
 ---
 
-## 파이프라인
+## 운영 파이프라인
 
 ```mermaid
 flowchart LR
   Scrape[Scrape] --> Dedupe[Dedupe]
-  Dedupe --> NotebookLM[NotebookLM]
-  NotebookLM --> Phase2[Phase2 AI]
-  Phase2 --> Alert[Alert/Report]
-  Alert --> Persist[Persist]
-  Persist --> Health[Health]
-  Health --> HyIEState[HyIE State]
+  Dedupe --> Lite[Build Lite State]
+  Lite --> PublishLite[Publish latest.json + state-lite.json]
+  PublishLite --> Smoke[Smoke Test]
+  Smoke --> AI[AI Patch]
+  AI --> PublishAI[Publish state-ai.json + merged hyie_state.json]
 ```
 
-1. **Scrape** — UAE media, social media, RSS (async `asyncio.gather`)
-2. **Dedupe** — DB + in-memory dedup
-3. **NotebookLM** — upload articles, analyze
-4. **Phase2 AI** — `phase2_ai.analyze_with_notebooklm_or_fallback`, threat scoring
-5. **Alert/Report** — immediate Telegram if HIGH/CRITICAL, periodic report, WhatsApp (Twilio)
-6. **Persist** — SQLite/Postgres via `persist_run_backend`
-7. **Health** — write `.health_state.json`
-8. **HyIE State** — build and persist `state/hyie_state.json` (HyIE-ERC² payload)
+1. Scrape: UAE media, social media, RSS를 비동기로 수집
+2. Dedupe: DB + in-process dedup으로 신규 canonical article 결정
+3. Lite: `_update_hyie_state(...)`로 canonical HYIE state 생성
+4. Publish Lite: `live/latest.json`, `live/v/<version>/state-lite.json`, legacy `live/hyie_state.json` 생성
+5. Smoke: publish 직후 raw `latest.json`과 versioned payload 검증
+6. AI: `state/ai_input.latest.json`을 읽어 NotebookLM 또는 fallback으로 `ai_analysis` 생성
+7. Publish AI: `live/v/<version>/state-ai.json`과 merged `live/hyie_state.json` 재발행
+
+---
+
+## hourly_job 모드 분리
+
+`src/iran_monitor/app.py`의 `hourly_job(...)`는 세 가지 모드를 가진다.
+
+| 모드 | 경로 | 용도 |
+|------|------|------|
+| `lite` | scrape → dedupe → build state → write AI input | delivery critical path |
+| `ai` | read AI input → NotebookLM/fallback → inject `ai_analysis` | 비차단 AI patch |
+| `full` | `lite` 후 `ai` 순차 실행 | 로컬 호환 / 단일 실행 |
+
+세부 구현은 `_run_lite_cycle(...)`와 `_run_ai_cycle(...)`로 분리되어 있으며, `scripts/run_now.py --mode lite|ai|full`과 `main.py --mode ...`에서 직접 호출할 수 있다.
+
+---
+
+## AI 입력 흐름
+
+```mermaid
+flowchart TB
+  Articles[deduped articles] --> LiteCycle[_run_lite_cycle]
+  LiteCycle --> AIInput[state/ai_input.latest.json]
+  AIInput --> AICycle[_run_ai_cycle]
+  AICycle --> StateFile[state/hyie_state.json]
+  StateFile --> Export[scripts/export_hyie_live.py]
+```
+
+`state/ai_input.latest.json`에는 아래 정보가 저장된다.
+
+- `run_ts`
+- `source_version`
+- `counts`
+- `flags`
+- `new_articles`
+
+이 파일은 런타임 handoff용이며 main 브랜치 커밋 대상은 아니다.
+
+---
+
+## 공개 payload 구조
+
+| 경로 | 설명 |
+|------|------|
+| `live/latest.json` | pointer payload. `version`, `aiVersion`, `publishedAt`, `stateTs`, `aiMode`, `litePath`, `aiPath` |
+| `live/v/<version>/state-lite.json` | canonical HYIE state without `ai_analysis` |
+| `live/v/<version>/state-ai.json` | `{ ai_analysis, ai_mode, ai_updated_at, source_version }` |
+| `live/hyie_state.json` | 하위호환 merged payload |
+| `live/last_updated.json` | publish summary |
+
+`version`은 lite state hash, `aiVersion`은 `ai_analysis` hash를 사용한다.
 
 ---
 
@@ -40,11 +90,12 @@ flowchart LR
 
 | 진입점 | 경로 | 용도 |
 |--------|------|------|
-| Main | `main.py` | Root entrypoint, delegates to `src.iran_monitor.app` |
-| Run now | `scripts/run_now.py` | One-shot run (`python scripts/run_now.py --telegram-send`), used by GHA |
-| Monitor | `scripts/run_monitor.py` | Long-running scheduler; calls `main._run_serve` |
-| Update state | `scripts/update_hyie_state_now.py` | Updates HyIE state without full scrape |
-| Export live | `scripts/export_hyie_live.py` | Exports `state/hyie_state.json` → `live/hyie_state.json` |
+| Main | `main.py` | root entrypoint, delegates to `src.iran_monitor.app` |
+| Run now | `scripts/run_now.py` | one-shot run for `full`, `lite`, `ai` |
+| Monitor | `scripts/run_monitor.py` | long-running scheduler |
+| Export live | `scripts/export_hyie_live.py` | state → versioned live payload export |
+| Publish branch | `scripts/publish_live_branch.py` | `live/` 디렉터리를 `urgentdash-live` 브랜치에 publish |
+| Smoke test | `scripts/smoke_test_live.py` | raw `latest.json` 및 versioned payload 검증 |
 
 ---
 
@@ -65,75 +116,53 @@ graph TB
 
 | 모듈 | 경로 | 역할 |
 |------|------|------|
-| config | `src/iran_monitor/config.py` | Pydantic settings (Telegram, Twilio, storage, HyIE) |
-| app | `src/iran_monitor/app.py` | Pipeline, scheduler (APScheduler), `hourly_job` |
-| health | `src/iran_monitor/health.py` | FastAPI health/state API |
-| state_engine | `src/iran_monitor/state_engine.py` | `build_state_payload`, `warming_up_payload` |
-| storage | `src/iran_monitor/storage.py` | `ensure_layout`, `save_json`, `append_jsonl` |
-| storage_adapter | `src/iran_monitor/storage_adapter.py` | `build_run_payload`, `build_article_rows`, `build_outbox_rows` |
-| storage_backend | `src/iran_monitor/storage_backend.py` | SQLite/Postgres, dedup |
-| reporter | `src/iran_monitor/reporter.py` | Telegram/WhatsApp |
+| config | `src/iran_monitor/config.py` | runtime settings, mode, NotebookLM rotation, AI input path |
+| app | `src/iran_monitor/app.py` | scrape/dedupe/publish pipeline, scheduler, health writes |
+| health | `src/iran_monitor/health.py` | `/health`, `/api/state`, egress ETA API |
 | phase2_ai | `src/iran_monitor/phase2_ai.py` | NotebookLM analysis + fallback |
-| route_geo | `src/iran_monitor/route_geo.py` | Route geo payload for dashboard |
-| scrapers | `src/iran_monitor/scrapers/` | `uae_media`, `social_media`, `rss_feed` |
-| sources | `src/iran_monitor/sources/` | Tier0/1/2 signals for HyIE |
+| reporter | `src/iran_monitor/reporter.py` | Telegram/WhatsApp |
+| storage_backend | `src/iran_monitor/storage_backend.py` | SQLite/Postgres persistence and dedup |
 
 ---
 
-## 데이터 흐름
+## Health 모델
 
-```mermaid
-flowchart TB
-  subgraph sources [Sources]
-    UAE[uae_media]
-    SNS[social_media]
-    RSS[rss_feed]
-  end
-  sources --> DB[(SQLite/Postgres)]
-  DB --> state_file[state/hyie_state.json]
-  state_file --> live[live/hyie_state.json]
-  state_file --> API["/api/state"]
-```
+`/health`는 기존 기본 필드를 유지하면서 운영용 필드를 추가로 노출한다.
 
----
+- `last_scrape_success_at`
+- `last_state_success_at`
+- `last_ai_success_at`
+- `last_publish_success_at`
+- `current_version`
+- `published_version`
+- `ai_mode`
+- `ai_version`
+- `source_lag_seconds`
+- `degraded_reasons`
+- `last_smoke_test_at`
+- `last_smoke_test_status`
 
-## API 명세
+상태 판정은 lite publish와 ai 결과를 분리한다.
 
-FastAPI app: `src/iran_monitor/health.py`
-
-| Endpoint | Method | 용도 |
-|----------|--------|------|
-| `/` | GET | API info and links |
-| `/health` | GET | Pipeline health: status, last run, article count |
-| `/api/state` | GET | HyIE-ERC² state (or warming_up payload) |
-| `/api/state/egress-eta` | GET | Egress ETA (`egress_loss_eta_h`, etc.) |
-| `/api/state/egress-eta` | POST | Set egress ETA (body: `egress_loss_eta_h`, `note`) |
-
-서빙: `uvicorn src.iran_monitor.health:app --host 127.0.0.1 --port 8000`
-
----
-
-## 상태 파일
-
-| 경로 | 용도 |
-|------|------|
-| `state/hyie_state.json` | Runtime HyIE-ERC² payload |
-| `state/egress_eta.json` | Egress ETA 사용자 설정 |
-| `live/hyie_state.json` | GHA publish 대상 (urgentdash-live) |
-| `live/last_updated.json` | 마지막 업데이트 시각 |
-| `.health_state.json` | Pipeline health (root) |
-| `state/monitor.lock`, `state/hyie_ingest.lock` | Lock files |
+- lite 성공 + ai fallback/실패: `degraded`
+- lite 실패: `error`
 
 ---
 
 ## GitHub Actions
 
-`.github/workflows/monitor.yml`:
+`.github/workflows/monitor.yml`
 
-- **Schedule**: cron `7,37 * * * *` (UTC)
-- **Steps**: Checkout → Python 3.11 → deps → Playwright → restore NotebookLM profile → `python scripts/run_now.py --telegram-send`
-- **Publish**: on success, copy `state/hyie_state.json` → `live/hyie_state.json` on `urgentdash-live` branch
-- **Artifacts**: `reports`, `state`, `ledger`, `.health_state.json` (retention 7 days)
+- Schedule: `7,22,37,52 * * * *`
+- Concurrency: workflow 단위 단일 실행
+- Freshness gate: 마지막 `publishedAt`이 25분 이내면 lite 생략
+- Lite 단계: `python scripts/run_now.py --mode lite --telegram-send`
+- Publish 단계: `python scripts/export_hyie_live.py --publish-mode lite` 후 `urgentdash-live` 브랜치 publish
+- Smoke 단계: raw `live/latest.json` fetch → schema + freshness 검증
+- AI 단계: NotebookLM auth restore/validate 후 `python scripts/run_now.py --mode ai --telegram-send`
+- AI publish는 workflow 전체의 availability를 막지 않음
+
+NotebookLM 인증이 만료되면 AI는 fallback으로 내려가며, 운영에서 NotebookLM을 다시 쓰려면 `nlm login` 또는 `NLM_COOKIES_JSON` / `NLM_METADATA_JSON` 갱신이 필요하다.
 
 ---
 
@@ -141,8 +170,8 @@ FastAPI app: `src/iran_monitor/health.py`
 
 | 경로 | 용도 |
 |------|------|
-| `state/` | Runtime state: hyie_state, egress_eta, locks |
-| `live/` | Dashboard output (urgentdash-live) |
-| `reports/` | Date-based JSONL reports |
-| `urgentdash_snapshots/` | Daily JSONL + hourly JSON snapshots |
-| `db/` | SQLite DB (`iran_monitor.sqlite`) |
+| `state/` | runtime state, locks, `ai_input.latest.json` |
+| `live/` | local/export output for urgentdash-live publish |
+| `reports/` | date-based JSONL reports |
+| `urgentdash_snapshots/` | daily JSONL + hourly JSON snapshots |
+| `db/` | SQLite DB |

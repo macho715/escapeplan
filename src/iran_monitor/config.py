@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     PHASE2_ENABLED: bool = True
     PHASE2_REQUIRED: bool = False
     PHASE2_QUERY_TIMEOUT_SEC: int = 90
+    PHASE2_MODE: str = "full"
     THREAT_THRESHOLD_MEDIUM: int = 40
     THREAT_THRESHOLD_HIGH: int = 70
     THREAT_THRESHOLD_CRITICAL: int = 85
@@ -50,6 +51,9 @@ class Settings(BaseSettings):
     PHASE2_PODCAST_ENABLED: bool = False
     PHASE2_REPORT_LANGUAGE: str = "ko"
     PHASE2_REQUIRE_CROSS_CHECK_FOR_ALERT: bool = False
+    PHASE2_ARTICLE_LIMIT: int = 12
+    NOTEBOOKLM_DAILY_ROTATION: bool = True
+    NOTEBOOKLM_NOTEBOOK_MAP_FILE: str = "state/notebooklm_ids.json"
 
     # Storage (A + B)
     STORAGE_ENABLED: bool = True
@@ -99,6 +103,7 @@ class Settings(BaseSettings):
     HYIE_EGRESS_ETA_FILE: str = "state/egress_eta.json"
     HYIE_INGEST_LOCK_FILE: str = "state/hyie_ingest.lock"
     HYIE_STATE_META_FILE: str = "state/hyie_state.meta.json"
+    HYIE_AI_INPUT_FILE: str = "state/ai_input.latest.json"
 
     def resolve_path(self, value: str) -> Path:
         return (Path(self.STORAGE_ROOT) / value).resolve()

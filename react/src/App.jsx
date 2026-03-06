@@ -1,9 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, Bar, Gauge, Pill } from "./components/ui.jsx";
-import { MultiLineChart, Sparkline } from "./components/charts.jsx";
-import RouteMapLeaflet from "./components/RouteMapLeaflet.jsx";
-import TimelinePanel from "./components/TimelinePanel.jsx";
-import Simulator from "./components/Simulator.jsx";
 
 import { INITIAL_DASHBOARD } from "./data/fallbackDashboard.js";
 import { KEY_ASSUMPTIONS, VERSION_HISTORY } from "./data/hyieLegacyContent.js";
@@ -23,7 +19,8 @@ import {
   STORAGE_KEYS,
   TIMELINE_MAX,
   getDashboardCandidates,
-  getFastStateCandidates
+  getFastStateCandidates,
+  getLatestPointerCandidates
 } from "./lib/constants.js";
 
 import {
@@ -31,6 +28,7 @@ import {
   downloadJson,
   formatDateTimeGST,
   formatTimeGST,
+  resolveRelativeUrl,
   safeGetLS,
   safeJsonParse,
   safeSetLS,
@@ -38,6 +36,9 @@ import {
 } from "./lib/utils.js";
 
 const FAST_FAIL_THRESHOLD = 5;
+const AnalysisTab = lazy(() => import("./components/AnalysisTab.jsx"));
+const RoutesTab = lazy(() => import("./components/RoutesTab.jsx"));
+const SimulatorTab = lazy(() => import("./components/SimulatorTab.jsx"));
 
 function normalizeNewsRef(ref, idx) {
   if (typeof ref === "string") {
@@ -77,6 +78,7 @@ export default function App() {
   const didStartFullSync = useRef(false);
   const fastFailCountRef = useRef(0);
   const fastFailLoggedRef = useRef(false);
+  const pointerStateRef = useRef({ version: null, aiVersion: null, rawSnapshot: null, latestSource: null });
 
   const fastPollMs = useMemo(() => {
     const env = Number(import.meta?.env?.VITE_FAST_POLL_MS);
@@ -86,6 +88,7 @@ export default function App() {
   const fastCountdownSeconds = useMemo(() => Math.max(1, Math.ceil(fastPollMs / 1000)), [fastPollMs]);
   const fullSyncMinutes = Math.max(1, Math.round(FULL_SYNC_INTERVAL_MS / 60000));
   const fastCandidates = useMemo(() => getFastStateCandidates(), []);
+  const latestCandidates = useMemo(() => getLatestPointerCandidates(), []);
 
   const derived = useMemo(() => deriveState(dash, egressLossETA), [dash, egressLossETA]);
 
@@ -125,13 +128,17 @@ export default function App() {
     setTimeline((prev) => mergeTimelineWithNoiseGate(prev, [mkEvent(ev)], { maxItems: TIMELINE_MAX }));
   }, []);
 
+  const fetchJsonCandidate = useCallback(async (candidate) => {
+    const sep = candidate.includes("?") ? "&" : "?";
+    const r = await fetch(`${candidate}${sep}t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }, []);
+
   const fetchCandidates = useCallback(async (candidates = []) => {
     for (const candidate of candidates) {
       try {
-        const sep = candidate.includes("?") ? "&" : "?";
-        const r = await fetch(`${candidate}${sep}t=${Date.now()}`, { cache: "no-store" });
-        if (!r.ok) continue;
-        const payload = await r.json();
+        const payload = await fetchJsonCandidate(candidate);
         const normalized = normalizeIncomingPayload(payload);
         if (!normalized) continue;
         if (normalized?.metadata) normalized.metadata.source = candidate;
@@ -141,7 +148,62 @@ export default function App() {
       }
     }
     return null;
-  }, []);
+  }, [fetchJsonCandidate]);
+
+  const fetchVersionedPayload = useCallback(async ({ force = false } = {}) => {
+    for (const candidate of latestCandidates) {
+      try {
+        const latest = await fetchJsonCandidate(candidate);
+        const version = String(latest?.version || "").trim();
+        const litePath = String(latest?.litePath || "").trim();
+        if (!version || !litePath) continue;
+
+        const nextAiVersion = latest?.aiVersion ?? null;
+        const prev = pointerStateRef.current;
+        const versionChanged = version !== prev.version;
+        const aiChanged = nextAiVersion !== prev.aiVersion;
+
+        let rawSnapshot = prev.rawSnapshot;
+        if (force || versionChanged || !rawSnapshot) {
+          rawSnapshot = await fetchJsonCandidate(resolveRelativeUrl(candidate, litePath));
+        } else if (rawSnapshot) {
+          rawSnapshot = { ...rawSnapshot };
+        }
+
+        const aiPath = String(latest?.aiPath || "").trim();
+        if (aiPath && nextAiVersion) {
+          if (force || versionChanged || aiChanged || !rawSnapshot?.ai_analysis) {
+            const aiPatch = await fetchJsonCandidate(resolveRelativeUrl(candidate, aiPath));
+            rawSnapshot = {
+              ...rawSnapshot,
+              ai_analysis: aiPatch?.ai_analysis ?? null
+            };
+          }
+        } else if (rawSnapshot?.ai_analysis) {
+          rawSnapshot = { ...rawSnapshot };
+          delete rawSnapshot.ai_analysis;
+        }
+
+        const normalized = normalizeIncomingPayload(rawSnapshot);
+        if (!normalized) continue;
+        if (normalized?.metadata) {
+          normalized.metadata.source = candidate;
+          normalized.metadata.version = version;
+          normalized.metadata.aiVersion = nextAiVersion;
+        }
+        pointerStateRef.current = {
+          version,
+          aiVersion: nextAiVersion,
+          rawSnapshot,
+          latestSource: candidate
+        };
+        return normalized;
+      } catch {
+        /* try next */
+      }
+    }
+    return null;
+  }, [fetchJsonCandidate, latestCandidates]);
 
   const mergeChecklist = (payloadChecklist, prevChecklist) => {
     return (payloadChecklist || []).map((item) => {
@@ -174,7 +236,7 @@ export default function App() {
   const fetchDashboard = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
-      const normalized = await fetchCandidates(getDashboardCandidates());
+      const normalized = await fetchVersionedPayload({ force: true }) || await fetchCandidates(getDashboardCandidates());
       if (!normalized) throw new Error("Invalid payload");
       if (!mounted.current) return;
 
@@ -190,11 +252,11 @@ export default function App() {
     } finally {
       if (showLoading && mounted.current) setLoading(false);
     }
-  }, [applyDashboard, fastCountdownSeconds, fetchCandidates, logEvent]);
+  }, [applyDashboard, fastCountdownSeconds, fetchCandidates, fetchVersionedPayload, logEvent]);
 
   const fetchFastState = useCallback(async () => {
     try {
-      const normalized = await fetchCandidates(fastCandidates);
+      const normalized = await fetchVersionedPayload() || await fetchCandidates(fastCandidates);
       if (!normalized) throw new Error("Fast poll unavailable");
       if (!mounted.current) return;
 
@@ -227,7 +289,7 @@ export default function App() {
         });
       }
     }
-  }, [applyDashboard, fastCandidates, fastCountdownSeconds, fetchCandidates, logEvent]);
+  }, [applyDashboard, fastCandidates, fastCountdownSeconds, fetchCandidates, fetchVersionedPayload, logEvent]);
 
   useEffect(() => {
     if (didStartTicker.current) return;
@@ -286,12 +348,6 @@ export default function App() {
   const gstDateTime = useMemo(() => formatDateTimeGST(now), [now]);
   const lagLabel = Number.isFinite(derived.liveLagSeconds) ? `${derived.liveLagSeconds}s` : "n/a";
 
-  const histH0 = useMemo(() => history.map((p) => p.scores?.H0 ?? 0), [history]);
-  const histH1 = useMemo(() => history.map((p) => p.scores?.H1 ?? 0), [history]);
-  const histH2 = useMemo(() => history.map((p) => p.scores?.H2 ?? 0), [history]);
-  const histDs = useMemo(() => history.map((p) => p.ds ?? 0), [history]);
-  const histEc = useMemo(() => history.map((p) => p.ec ?? 0), [history]);
-
   const exportTimeline = () => {
     const name = `timeline_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
     downloadJson(name, timeline);
@@ -307,6 +363,11 @@ export default function App() {
   }, [dash.routes]);
 
   const stat = (value, suffix = "") => (Number.isFinite(Number(value)) ? `${Number(value)}${suffix}` : "n/a");
+  const lazyPanelFallback = (
+    <Card>
+      <div style={{ fontSize: 12, color: "#94a3b8" }}>패널 로딩 중…</div>
+    </Card>
+  );
 
   return (
     <div style={{ minHeight: "100vh", padding: 12, maxWidth: 980, margin: "0 auto" }}>
@@ -490,33 +551,23 @@ export default function App() {
       )}
 
       {tab === "analysis" && (
-        <div>
-          <Card>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 900 }}>📈 Hypothesis Trend Graph</div>
-                <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>최근 {history.length} 포인트 (최대 {HISTORY_MAX_POINTS})</div>
-              </div>
-              <button onClick={() => { setHistory([]); logEvent({ level: "INFO", category: "SYSTEM", title: "History cleared" }); }} style={{ background: "#0b1220", border: "1px solid #1e293b", color: "#94a3b8", borderRadius: 10, padding: "10px 12px", fontSize: 11, fontWeight: 900, cursor: "pointer" }}>Reset history</button>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <MultiLineChart height={160} min={0} max={1} series={[{ id: "H0", label: "H0", color: "#22c55e", data: histH0 }, { id: "H1", label: "H1", color: "#f59e0b", data: histH1 }, { id: "H2", label: "H2", color: "#ef4444", data: histH2 }]} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", marginBottom: 6 }}><span>ΔScore trend</span><span style={{ fontFamily: "monospace" }}>{derived.ds.toFixed(3)}</span></div>
-                <Sparkline data={histDs} min={-0.2} max={0.6} color="#f59e0b" />
-              </div>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#64748b", marginBottom: 6 }}><span>EvidenceConf trend</span><span style={{ fontFamily: "monospace" }}>{derived.ec.toFixed(3)}</span></div>
-                <Sparkline data={histEc} min={0} max={1} color="#22c55e" />
-              </div>
-            </div>
-          </Card>
-          <Card style={{ marginBottom: 0 }}>
-            <TimelinePanel timeline={timeline} onClear={() => { setTimeline([]); logEvent({ level: "INFO", category: "SYSTEM", title: "Timeline cleared" }); }} onExport={exportTimeline} />
-          </Card>
-        </div>
+        <Suspense fallback={lazyPanelFallback}>
+          <AnalysisTab
+            history={history}
+            derived={derived}
+            timeline={timeline}
+            historyMaxPoints={HISTORY_MAX_POINTS}
+            onClearHistory={() => {
+              setHistory([]);
+              logEvent({ level: "INFO", category: "SYSTEM", title: "History cleared" });
+            }}
+            onClearTimeline={() => {
+              setTimeline([]);
+              logEvent({ level: "INFO", category: "SYSTEM", title: "Timeline cleared" });
+            }}
+            onExportTimeline={exportTimeline}
+          />
+        </Suspense>
       )}
 
       {tab === "intel" && (
@@ -579,71 +630,22 @@ export default function App() {
       )}
 
       {tab === "routes" && (
-        <div>
-          <Card>
-            <RouteMapLeaflet routes={dash.routes} routeGeo={dash.routeGeo} selectedId={selectedRouteId} onSelect={(rid) => setSelectedRouteId((prev) => (prev === rid ? null : rid))} />
-            {selectedRouteId && (
-              <div style={{ marginTop: 12, background: "#0b1220", border: "1px solid #1e293b", borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 900 }}>Selected Route: {selectedRouteId}</div>
-                <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>아래 카드에서 해당 Route가 하이라이트됩니다.</div>
-              </div>
-            )}
-          </Card>
-          {(dash.routes || []).map((r) => {
-            const eff = r.base_h * (1 + (r.cong ?? r.congestion ?? 0)) * ROUTE_BUFFER_FACTOR;
-            const isBlocked = r.status === "BLOCKED";
-            const isCaution = r.status === "CAUTION";
-            const borderColor = selectedRouteId === r.id ? "#3b82f6" : (isBlocked ? "#7f1d1d" : isCaution ? "#92400e" : "#1e293b");
-            const badgeBg = isBlocked ? "#7f1d1d" : isCaution ? "#92400e" : "#14532d";
-            const statusColor = isBlocked ? "#f87171" : isCaution ? "#f59e0b" : "#22c55e";
-            const refs = (Array.isArray(r.newsRefs) ? r.newsRefs : []).map(normalizeNewsRef).filter(Boolean);
-
-            return (
-              <div key={r.id} style={{ background: "#0f172a", border: `2px solid ${borderColor}`, borderRadius: 12, padding: 16, marginBottom: 10, opacity: isBlocked ? 0.82 : 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: badgeBg, fontSize: 13, fontWeight: 900, color: "#fff" }}>{r.id}</span>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 900 }}>{r.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 10, color: statusColor, fontWeight: 900 }}>{r.status}</span>
-                        {isBlocked && <span style={{ fontSize: 9, background: "#7f1d1d", color: "#fca5a5", padding: "2px 6px", borderRadius: 6, fontWeight: 900 }}>⛔ 사용금지</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 18, fontWeight: 900, fontFamily: "monospace", color: isBlocked ? "#f87171" : "#e2e8f0" }}>{isBlocked ? "—" : `${eff.toFixed(1)}h`}</div>
-                    <div style={{ fontSize: 10, color: "#64748b" }}>{isBlocked ? "차단" : `effective (buffer x${ROUTE_BUFFER_FACTOR})`}</div>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                  <div style={{ background: "#1e293b", borderRadius: 10, padding: 10, textAlign: "center" }}><div style={{ fontSize: 10, color: "#64748b" }}>Base</div><div style={{ fontSize: 14, fontWeight: 900, fontFamily: "monospace", color: "#94a3b8" }}>{r.base_h}h</div></div>
-                  <div style={{ background: "#1e293b", borderRadius: 10, padding: 10, textAlign: "center" }}><div style={{ fontSize: 10, color: "#64748b" }}>Congestion</div><div style={{ fontSize: 14, fontWeight: 900, fontFamily: "monospace", color: (r.cong ?? r.congestion ?? 0) > 0.5 ? "#f87171" : (r.cong ?? r.congestion ?? 0) > 0.3 ? "#f59e0b" : "#22c55e" }}>{(r.cong ?? r.congestion ?? 0).toFixed(2)}</div></div>
-                  <div style={{ background: "#1e293b", borderRadius: 10, padding: 10, textAlign: "center" }}><div style={{ fontSize: 10, color: "#64748b" }}>Status</div><div style={{ fontSize: 14, fontWeight: 900, color: statusColor }}>{r.status}</div></div>
-                </div>
-                {r.note && <div style={{ fontSize: 11, color: "#cbd5e1", marginTop: 6 }}>{r.note}</div>}
-                {refs.length > 0 && (
-                  <div style={{ marginTop: 10, background: "#0b1220", border: "1px solid #1e293b", borderRadius: 10, padding: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 900 }}>Related refs</div>
-                      <div style={{ fontSize: 10, color: "#475569" }}>{refs.length} items</div>
-                    </div>
-                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                      {refs.map((ref) => (
-                        ref.url
-                          ? <a key={ref.id} href={ref.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#93c5fd", textDecoration: "none" }}>{ref.label}</a>
-                          : <div key={ref.id} style={{ fontSize: 11, color: "#cbd5e1" }}>{ref.label}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <Suspense fallback={lazyPanelFallback}>
+          <RoutesTab
+            dash={dash}
+            selectedRouteId={selectedRouteId}
+            onSelectRoute={(rid) => setSelectedRouteId((prev) => (prev === rid ? null : rid))}
+            normalizeNewsRef={normalizeNewsRef}
+            routeBufferFactor={ROUTE_BUFFER_FACTOR}
+          />
+        </Suspense>
       )}
 
-      {tab === "sim" && <div><Simulator liveDash={dash} onLog={logEvent} /></div>}
+      {tab === "sim" && (
+        <Suspense fallback={lazyPanelFallback}>
+          <SimulatorTab liveDash={dash} onLog={logEvent} />
+        </Suspense>
+      )}
 
       {tab === "checklist" && (
         <div>

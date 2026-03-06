@@ -212,25 +212,25 @@ send_telegram_alert = send_telegram_alert
 send_telegram_report = send_telegram_report
 
 
-async def hourly_job(*, approval_required: bool = False, dry_run: bool = False) -> None:
+async def hourly_job(*, approval_required: bool = False, dry_run: bool = False, mode: str = "full") -> None:
     _bind_testable_hooks()
-    await _app.hourly_job(approval_required=approval_required, dry_run=dry_run)
+    await _app.hourly_job(approval_required=approval_required, dry_run=dry_run, mode=mode)
 
 
-def _run_once(*, telegram_send: bool, dry_run: bool, json_archive: bool | None = None) -> None:
+def _run_once(*, telegram_send: bool, dry_run: bool, json_archive: bool | None = None, mode: str = "full") -> None:
     if json_archive is False:
         settings.REPORTS_ARCHIVE_ENABLED = False
     if json_archive is True:
         settings.REPORTS_ARCHIVE_ENABLED = True
 
     approval_required = not telegram_send
-    asyncio.run(hourly_job(approval_required=approval_required, dry_run=dry_run))
+    asyncio.run(hourly_job(approval_required=approval_required, dry_run=dry_run, mode=mode))
 
 
-def _run_serve(*, telegram_send: bool, dry_run: bool) -> None:
+def _run_serve(*, telegram_send: bool, dry_run: bool, mode: str = "full") -> None:
     approval_required = not telegram_send
     _bind_testable_hooks()
-    run(approval_required=approval_required, dry_run=dry_run)
+    run(approval_required=approval_required, dry_run=dry_run, mode=mode)
 
 
 async def _probe_mode() -> dict:
@@ -246,6 +246,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--serve", action="store_true", help="Run scheduler service")
     parser.add_argument("--json-archive", action="store_true", help="Force JSON archive on")
     parser.add_argument("--json-archive-off", action="store_true", help="Force JSON archive off for this run")
+    parser.add_argument("--mode", choices=["full", "lite", "ai"], default="full", help="Select delivery mode")
     return parser
 
 
@@ -261,11 +262,11 @@ def main() -> int:
     json_archive = True if args.json_archive else (False if args.json_archive_off else None)
 
     if args.once or args.dry_run:
-        _run_once(telegram_send=args.telegram_send, dry_run=args.dry_run, json_archive=json_archive)
+        _run_once(telegram_send=args.telegram_send, dry_run=args.dry_run, json_archive=json_archive, mode=args.mode)
         return 0
 
     if args.serve:
-        _run_serve(telegram_send=args.telegram_send, dry_run=args.dry_run)
+        _run_serve(telegram_send=args.telegram_send, dry_run=args.dry_run, mode=args.mode)
         return 0
 
     legacy_script = ROOT / "iran-war-uae-monitor" / "scripts" / "run_monitor.py"

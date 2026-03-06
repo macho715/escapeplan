@@ -19,7 +19,7 @@ import os
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -73,12 +73,16 @@ def _resolve_storage_path(value: str) -> Path:
 
 
 NOTEBOOKLM_ID_FILE = _resolve_storage_path(settings.NOTEBOOKLM_ID_FILE)
+NOTEBOOKLM_NOTEBOOK_MAP_FILE = _resolve_storage_path(settings.NOTEBOOKLM_NOTEBOOK_MAP_FILE)
 HEALTH_STATE_FILE = _resolve_storage_path(settings.HEALTH_STATE_FILE)
 HYIE_STATE_FILE = _resolve_storage_path(settings.HYIE_STATE_FILE)
 HYIE_EGRESS_ETA_FILE = _resolve_storage_path(settings.HYIE_EGRESS_ETA_FILE)
 HYIE_INGEST_LOCK_FILE = _resolve_storage_path(settings.HYIE_INGEST_LOCK_FILE)
 HYIE_STATE_META_FILE = _resolve_storage_path(settings.HYIE_STATE_META_FILE)
+HYIE_AI_INPUT_FILE = _resolve_storage_path(settings.HYIE_AI_INPUT_FILE)
 DUBAI_TZ = ZoneInfo("Asia/Dubai")
+
+RunMode = Literal["full", "lite", "ai"]
 
 _LOCK_HELD_BY_CURRENT_PROCESS = False
 
@@ -168,6 +172,117 @@ def _save_notebook_id(notebook_id: str) -> None:
     logger.info("노트북 ID 파일 저장", id=notebook_id, path=str(NOTEBOOKLM_ID_FILE))
 
 
+def _load_notebook_id_map() -> dict[str, str]:
+    if not NOTEBOOKLM_NOTEBOOK_MAP_FILE.exists():
+        return {}
+    try:
+        payload = json.loads(NOTEBOOKLM_NOTEBOOK_MAP_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {str(k): str(v) for k, v in payload.items() if str(v).strip()}
+
+
+def _save_notebook_id_map(data: dict[str, str]) -> None:
+    NOTEBOOKLM_NOTEBOOK_MAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    NOTEBOOKLM_NOTEBOOK_MAP_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _current_notebook_bucket() -> str:
+    if settings.NOTEBOOKLM_DAILY_ROTATION:
+        return _now_dubai().date().isoformat()
+    return "default"
+
+
+def _load_current_notebook_id() -> str | None:
+    bucket = _current_notebook_bucket()
+    mapping = _load_notebook_id_map()
+    notebook_id = str(mapping.get(bucket) or "").strip()
+    if notebook_id:
+        return notebook_id
+    return _load_notebook_id()
+
+
+def _save_current_notebook_id(notebook_id: str) -> None:
+    if settings.NOTEBOOKLM_DAILY_ROTATION:
+        mapping = _load_notebook_id_map()
+        mapping[_current_notebook_bucket()] = notebook_id
+        _save_notebook_id_map(mapping)
+    _save_notebook_id(notebook_id)
+
+
+def _hash_payload(obj: Any) -> str:
+    return hashlib.sha1(
+        json.dumps(obj, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def _compute_ai_version(ai_analysis: dict[str, Any] | None) -> str | None:
+    if not isinstance(ai_analysis, dict) or not ai_analysis:
+        return None
+    return _hash_payload(ai_analysis)
+
+
+def _load_health_state() -> dict[str, Any]:
+    if not HEALTH_STATE_FILE.exists():
+        return {}
+    try:
+        payload = json.loads(HEALTH_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _merge_health_status(current: str, incoming: str) -> str:
+    rank = {"unknown": 0, "ok": 1, "degraded": 2, "error": 3}
+    current_norm = str(current or "unknown")
+    incoming_norm = str(incoming or current_norm)
+    return incoming_norm if rank.get(incoming_norm, 0) >= rank.get(current_norm, 0) else current_norm
+
+
+def _current_state_version() -> str | None:
+    if not HYIE_STATE_META_FILE.exists():
+        return None
+    try:
+        payload = json.loads(HYIE_STATE_META_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = str(payload.get("state_hash") or "").strip()
+    return value or None
+
+
+def _source_lag_seconds(state_ts: str | None) -> int | None:
+    text = str(state_ts or "").strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    return max(0, int((_now_dubai() - dt.astimezone(DUBAI_TZ)).total_seconds()))
+
+
+def _save_ai_input_payload(payload: dict[str, Any]) -> None:
+    HYIE_AI_INPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    HYIE_AI_INPUT_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_ai_input_payload() -> dict[str, Any] | None:
+    if not HYIE_AI_INPUT_FILE.exists():
+        return None
+    try:
+        payload = json.loads(HYIE_AI_INPUT_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def _extract_id(obj: Any) -> str:
     if isinstance(obj, dict):
         return obj.get("notebook_id") or obj.get("id", str(obj))
@@ -191,17 +306,20 @@ def _create_notebook_client() -> NotebookLMClient:
 
 
 def _get_or_create_notebook(client: NotebookLMClient) -> str:
-    notebook_id = _load_notebook_id()
+    notebook_id = _load_current_notebook_id()
     if notebook_id:
         logger.info("저장된 NotebookLM 노트북 ID 재사용", id=notebook_id)
         return notebook_id
+
+    bucket = _current_notebook_bucket()
+    title_prefix = NOTEBOOK_TITLE if bucket == "default" else f"{NOTEBOOK_TITLE} [{bucket}]"
 
     try:
         notebooks = client.list_notebooks()
         matched: list[str] = []
         for notebook in notebooks:
             notebook_title = getattr(notebook, "title", "") or ""
-            if NOTEBOOK_TITLE in notebook_title or "이란-UAE" in notebook_title:
+            if title_prefix in notebook_title:
                 matched.append(_extract_id(notebook))
         if matched:
             notebook_id = matched[0]
@@ -211,15 +329,15 @@ def _get_or_create_notebook(client: NotebookLMClient) -> str:
                     logger.info("중복 NotebookLM 노트북 삭제", id=duplicate_id)
                 except Exception:
                     pass
-            _save_notebook_id(notebook_id)
+            _save_current_notebook_id(notebook_id)
             logger.info("기존 NotebookLM 노트북 선택", id=notebook_id)
             return notebook_id
     except Exception as exc:
         logger.warning("노트북 목록 조회 실패", error=str(exc))
 
-    notebook = client.create_notebook(NOTEBOOK_TITLE)
+    notebook = client.create_notebook(title_prefix)
     notebook_id = _extract_id(notebook)
-    _save_notebook_id(notebook_id)
+    _save_current_notebook_id(notebook_id)
     logger.info("새 NotebookLM 노트북 생성", id=notebook_id)
     return notebook_id
 
@@ -231,8 +349,9 @@ def _upload_to_notebooklm(articles: list[dict]) -> dict[str, str] | None:
         with _create_notebook_client() as client:
             notebook_id = _get_or_create_notebook(client)
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+            trimmed_articles = list(articles[: max(1, int(settings.PHASE2_ARTICLE_LIMIT))])
             content_lines = [f"# UAE 이란 전황 업데이트 — {now_str}\n"]
-            for article in articles:
+            for article in trimmed_articles:
                 content_lines.append(
                     f"**[{article['source']}]** {article['title']}\n링크: {article['link']}\n"
                 )
@@ -245,6 +364,7 @@ def _upload_to_notebooklm(articles: list[dict]) -> dict[str, str] | None:
                 "notebook_id": notebook_id,
                 "source_id": source_id,
                 "notebook_url": f"https://notebooklm.google.com/notebook/{notebook_id}",
+                "article_count": str(len(trimmed_articles)),
             }
     except Exception as exc:
         logger.warning("NotebookLM 업로드 실패", error=str(exc))
@@ -258,9 +378,16 @@ def _write_health_state(
     last_error: str | None = None,
     last_run_ts: str | None = None,
     counts: dict[str, int] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     try:
-        data = {"status": status}
+        data = _load_health_state()
+        previous_run_ts = str(data.get("last_run_ts") or "")
+        incoming_run_ts = str(last_run_ts or previous_run_ts)
+        if previous_run_ts and incoming_run_ts and previous_run_ts != incoming_run_ts:
+            data["status"] = status
+        else:
+            data["status"] = _merge_health_status(str(data.get("status", "unknown")), status)
         if last_success_at:
             data["last_success_at"] = last_success_at
         if last_run_ts:
@@ -273,6 +400,12 @@ def _write_health_state(
             data["counts"] = counts
         if last_error:
             data["last_error"] = last_error
+        elif status in {"ok", "degraded"} and incoming_run_ts:
+            data.pop("last_error", None)
+        if extra:
+            for key, value in extra.items():
+                if value is not None:
+                    data[key] = value
         HEALTH_STATE_FILE.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -935,91 +1068,165 @@ async def _update_hyie_state(all_articles: list[dict[str, Any]], run_ts: str, fl
         _release_hyie_ingest_lock()
 
 
-async def hourly_job(*, approval_required: bool = False, dry_run: bool = False) -> None:
-    now_dt = _now_dubai()
-    now = now_dt.strftime("%Y-%m-%d %H:%M")
-    run_ts = now_dt.isoformat(timespec="seconds")
-    logger.info("모니터링 사이클 시작", run_at=now, run_ts=run_ts)
+async def _collect_articles_for_cycle(run_ts: str) -> tuple[list[dict[str, Any]], list[str]]:
     flags: list[str] = []
+    uae_articles, social_articles, rss_articles = await asyncio.gather(
+        scrape_uae_media(),
+        scrape_social_media(),
+        scrape_rss(),
+        return_exceptions=True,
+    )
 
-    try:
-        uae_articles, social_articles, rss_articles = await asyncio.gather(
-            scrape_uae_media(),
-            scrape_social_media(),
-            scrape_rss(),
-            return_exceptions=True,
+    if isinstance(uae_articles, Exception):
+        logger.warning("UAE 미디어 스크랩 실패", error=str(uae_articles))
+        uae_articles = []
+        flags.append("SCRAPE_DEGRADED")
+
+    if isinstance(social_articles, Exception):
+        logger.warning("소셜미디어 스크랩 실패", error=str(social_articles))
+        social_articles = []
+        flags.append("SCRAPE_DEGRADED")
+
+    if isinstance(rss_articles, Exception):
+        logger.warning("RSS 스크랩 실패", error=str(rss_articles))
+        rss_articles = []
+        flags.append("SCRAPE_DEGRADED")
+
+    all_articles = list(uae_articles) + list(social_articles) + list(rss_articles)
+    logger.info("기사 수집 완료", total=len(all_articles), run_ts=run_ts)
+    return all_articles, flags
+
+
+def _degraded_reasons(flags: list[str], hyie_payload: dict[str, Any] | None = None) -> list[str]:
+    reasons = set(flags)
+    if isinstance(hyie_payload, dict):
+        for item in hyie_payload.get("flags", []):
+            if item:
+                reasons.add(str(item))
+    return sorted(reasons)
+
+
+def _write_ai_input(
+    *,
+    run_ts: str,
+    current_version: str | None,
+    all_articles: list[dict[str, Any]],
+    new_articles: list[dict[str, Any]],
+    flags: list[str],
+) -> None:
+    _save_ai_input_payload(
+        {
+            "run_ts": run_ts,
+            "source_version": current_version,
+            "counts": {
+                "total_count": len(all_articles),
+                "new_count": len(new_articles),
+                "unique_count": len(new_articles),
+            },
+            "flags": sorted(set(flags)),
+            "new_articles": new_articles,
+        }
+    )
+
+
+async def _run_lite_cycle(*, run_ts: str, approval_required: bool, dry_run: bool) -> dict[str, Any]:
+    del approval_required, dry_run
+
+    all_articles, flags = await _collect_articles_for_cycle(run_ts)
+    _write_health_state(
+        "ok",
+        last_run_ts=run_ts,
+        extra={
+            "last_scrape_success_at": run_ts,
+            "counts": {"total_count": len(all_articles)},
+        },
+    )
+
+    hyie_payload = await _update_hyie_state(all_articles, run_ts, flags)
+    new_articles = _filter_new_persistent(all_articles)
+    current_version = _current_state_version()
+    degraded_reasons = _degraded_reasons(flags, hyie_payload)
+    _write_ai_input(
+        run_ts=run_ts,
+        current_version=current_version,
+        all_articles=all_articles,
+        new_articles=new_articles,
+        flags=degraded_reasons,
+    )
+
+    status = "degraded" if degraded_reasons or (hyie_payload or {}).get("degraded") else "ok"
+    _write_health_state(
+        status,
+        last_success_at=run_ts,
+        last_article_count=len(new_articles),
+        last_run_ts=run_ts,
+        counts={
+            "new_count": len(new_articles),
+            "total_count": len(all_articles),
+            "unique_count": len(new_articles),
+        },
+        extra={
+            "last_state_success_at": run_ts if hyie_payload else None,
+            "current_version": current_version,
+            "source_lag_seconds": _source_lag_seconds((hyie_payload or {}).get("state_ts")),
+            "degraded_reasons": degraded_reasons,
+        },
+    )
+    logger.info(
+        "Lite state 완료",
+        current_version=current_version,
+        new_count=len(new_articles),
+        degraded_reasons=degraded_reasons,
+    )
+    return {
+        "run_ts": run_ts,
+        "all_articles": all_articles,
+        "new_articles": new_articles,
+        "flags": degraded_reasons,
+        "hyie_payload": hyie_payload,
+        "current_version": current_version,
+    }
+
+
+async def _run_ai_cycle(*, run_ts: str, approval_required: bool, dry_run: bool) -> dict[str, Any] | None:
+    ai_input = _load_ai_input_payload()
+    if not ai_input:
+        _write_health_state(
+            "degraded",
+            last_run_ts=run_ts,
+            last_error="RuntimeError: AI input payload missing",
+            extra={"degraded_reasons": ["AI_INPUT_MISSING"]},
         )
+        logger.warning("AI 모드 스킵: ai_input payload 없음")
+        return None
 
-        if isinstance(uae_articles, Exception):
-            logger.warning("UAE 미디어 스크랩 실패", error=str(uae_articles))
-            uae_articles = []
-            flags.append("SCRAPE_DEGRADED")
+    source_version = str(ai_input.get("source_version") or _current_state_version() or "")
+    counts = ai_input.get("counts") if isinstance(ai_input.get("counts"), dict) else {}
+    new_articles = ai_input.get("new_articles") if isinstance(ai_input.get("new_articles"), list) else []
+    flags = [str(item) for item in ai_input.get("flags", []) if item]
 
-        if isinstance(social_articles, Exception):
-            logger.warning("소셜미디어 스크랩 실패", error=str(social_articles))
-            social_articles = []
-            flags.append("SCRAPE_DEGRADED")
+    analysis = _fallback_analysis(new_articles)
+    notebook_context: dict[str, str] | None = None
+    notebook_url: str | None = None
 
-        if isinstance(rss_articles, Exception):
-            logger.warning("RSS 스크랩 실패", error=str(rss_articles))
-            rss_articles = []
-            flags.append("SCRAPE_DEGRADED")
-
-        all_articles = list(uae_articles) + list(social_articles) + list(rss_articles)
-        logger.info("기사 수집 완료", total=len(all_articles))
-
-        hyie_payload = await _update_hyie_state(all_articles, run_ts, flags)
-        if hyie_payload:
-            logger.info(
-                "HyIE 상태 갱신 완료",
-                status=hyie_payload.get("status"),
-                degraded=hyie_payload.get("degraded"),
-                evidence_conf=hyie_payload.get("evidence_conf"),
-                delta_score=hyie_payload.get("delta_score"),
-            )
-
-        new_articles = _filter_new_persistent(all_articles)
-        logger.info("신규 기사 필터링 완료", new_count=len(new_articles))
-
-        if not new_articles:
-            analysis = _fallback_analysis(all_articles)
-            flags.append("NO_NEW_ARTICLES")
-            _inject_ai_analysis_into_hyie_state(analysis, None)
-            _persist_storage(analysis=analysis, articles=[], report_text="", notebook_url=None, flags=flags)
-            _write_health_state(
-                "ok",
-                last_success_at=run_ts,
-                last_article_count=0,
-                last_run_ts=run_ts,
-                counts={"new_count": 0, "total_count": len(all_articles), "unique_count": 0},
-            )
-            logger.info("새로운 소식 없음, 보고 전송 생략")
-            return
-
+    if new_articles:
         loop = asyncio.get_event_loop()
-
         notebook_context = await loop.run_in_executor(None, _upload_to_notebooklm, new_articles)
         if not notebook_context:
             flags.append("NOTEBOOK_UPLOAD_FAILED")
-            if settings.PHASE2_REQUIRED:
-                raise RuntimeError("NotebookLM upload failed in PHASE2_REQUIRED mode")
 
         analysis = await loop.run_in_executor(None, _analyze_phase2, new_articles, notebook_context)
         analysis = _apply_verification_gate(analysis, new_articles)
         if settings.PHASE2_REQUIRED and str(analysis.get("analysis_source", "")).lower() != "notebooklm":
-            raise RuntimeError(
-                f"NotebookLM analysis required but got analysis_source={analysis.get('analysis_source')!r}"
-            )
+            flags.append("AI_REQUIRED_NOT_MET")
         notebook_url = (notebook_context or {}).get("notebook_url")
-
         _inject_ai_analysis_into_hyie_state(analysis, notebook_url)
 
         if should_send_immediate_alert(analysis, settings.PHASE2_ALERT_LEVELS) and analysis.get("analysis_verified", True):
             alert_ok = await send_telegram_alert(_build_immediate_alert_message(analysis, notebook_url=notebook_url))
             if not alert_ok:
                 flags.append("ALERT_SEND_FAILED")
-        elif should_send_immediate_alert(analysis, settings.PHASE2_ALERT_LEVELS) and not analysis.get("analysis_verified", True):
-            logger.warning("AI 교차 검증 미완료: 경보 보류")
+        elif should_send_immediate_alert(analysis, settings.PHASE2_ALERT_LEVELS):
             flags.append("ALERT_GATED_UNVERIFIED")
 
         if settings.PHASE2_PODCAST_ENABLED:
@@ -1049,24 +1256,70 @@ async def hourly_job(*, approval_required: bool = False, dry_run: bool = False) 
             notebook_url=notebook_url,
             flags=flags,
         )
+    else:
+        _inject_ai_analysis_into_hyie_state(analysis, None)
+        flags.append("NO_NEW_ARTICLES")
 
-        _write_health_state(
-            "ok",
-            last_success_at=run_ts,
-            last_article_count=len(new_articles),
-            last_run_ts=run_ts,
-            counts={
-                "new_count": len(new_articles),
-                "total_count": len(all_articles),
-                "unique_count": len(new_articles),
-            },
-        )
-        logger.info(
-            "보고 완료",
-            threat_level=analysis["threat_level"],
-            analysis_source=analysis["analysis_source"],
-            flags=sorted(set(flags)),
-        )
+    ai_mode = str(analysis.get("analysis_source", "fallback")).lower()
+    ai_payload = {
+        "ai_analysis": {
+            "threat_level": analysis.get("threat_level"),
+            "threat_score": analysis.get("threat_score"),
+            "sentiment": analysis.get("sentiment"),
+            "abu_dhabi_level": analysis.get("abu_dhabi_level"),
+            "dubai_level": analysis.get("dubai_level"),
+            "summary": analysis.get("summary"),
+            "recommended_action": analysis.get("recommended_action"),
+            "key_points": analysis.get("key_points", []),
+            "analysis_source": analysis.get("analysis_source"),
+            "notebook_url": notebook_url,
+            "updated_at": _now_dubai().isoformat(timespec="seconds"),
+        },
+        "ai_mode": ai_mode,
+        "ai_updated_at": _now_dubai().isoformat(timespec="seconds"),
+        "source_version": source_version or None,
+    }
+    ai_version = _compute_ai_version(ai_payload.get("ai_analysis"))
+    status = "degraded" if flags or ai_mode != "notebooklm" else "ok"
+    _write_health_state(
+        status,
+        last_success_at=run_ts,
+        last_article_count=len(new_articles),
+        last_run_ts=run_ts,
+        counts={
+            "new_count": counts.get("new_count", len(new_articles)),
+            "total_count": counts.get("total_count", len(new_articles)),
+            "unique_count": counts.get("unique_count", len(new_articles)),
+        },
+        extra={
+            "last_ai_success_at": run_ts,
+            "current_version": source_version or None,
+            "ai_mode": ai_mode,
+            "ai_version": ai_version,
+            "degraded_reasons": sorted(set(flags)),
+        },
+    )
+    logger.info(
+        "AI 단계 완료",
+        ai_mode=ai_mode,
+        ai_version=ai_version,
+        source_version=source_version,
+        flags=sorted(set(flags)),
+    )
+    return ai_payload
+
+
+async def hourly_job(*, approval_required: bool = False, dry_run: bool = False, mode: RunMode = "full") -> None:
+    now_dt = _now_dubai()
+    now = now_dt.strftime("%Y-%m-%d %H:%M")
+    run_ts = now_dt.isoformat(timespec="seconds")
+    logger.info("모니터링 사이클 시작", run_at=now, run_ts=run_ts, mode=mode)
+
+    try:
+        if mode in {"full", "lite"}:
+            await _run_lite_cycle(run_ts=run_ts, approval_required=approval_required, dry_run=dry_run)
+        if mode in {"full", "ai"}:
+            await _run_ai_cycle(run_ts=run_ts, approval_required=approval_required, dry_run=dry_run)
 
     except Exception as exc:
         logger.exception("파이프라인 실패")
@@ -1077,11 +1330,10 @@ async def hourly_job(*, approval_required: bool = False, dry_run: bool = False) 
         )
         if settings.HEALTH_ALERT_ENABLED:
             await send_telegram_alert(f"⚠️ Iran-UAE Monitor 파이프라인 실패\n\n{type(exc).__name__}: {exc}")
-        if settings.PHASE2_REQUIRED:
-            raise
+        raise
 
 
-async def main(*, approval_required: bool = False, dry_run: bool = False) -> None:
+async def main(*, approval_required: bool = False, dry_run: bool = False, mode: RunMode = "full") -> None:
     import subprocess
     import sys
 
@@ -1102,7 +1354,7 @@ async def main(*, approval_required: bool = False, dry_run: bool = False) -> Non
         "interval",
         minutes=30,
         next_run_time=datetime.now(),
-        kwargs={"approval_required": approval_required, "dry_run": dry_run},
+        kwargs={"approval_required": approval_required, "dry_run": dry_run, "mode": mode},
     )
     scheduler.start()
 
@@ -1114,11 +1366,11 @@ async def main(*, approval_required: bool = False, dry_run: bool = False) -> Non
         scheduler.shutdown()
 
 
-def run(*, approval_required: bool = False, dry_run: bool = False) -> None:
+def run(*, approval_required: bool = False, dry_run: bool = False, mode: RunMode = "full") -> None:
     if not _acquire_single_instance_lock():
         return
     try:
-        asyncio.run(main(approval_required=approval_required, dry_run=dry_run))
+        asyncio.run(main(approval_required=approval_required, dry_run=dry_run, mode=mode))
     finally:
         _release_single_instance_lock()
 

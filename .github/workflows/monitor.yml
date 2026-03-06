@@ -1,10 +1,18 @@
-name: Iran-UAE Monitor (30m)
+name: Iran-UAE Monitor (15m Overschedule)
 
 on:
   schedule:
-    # Every 30 minutes (UTC), offset from :00 to reduce queue contention.
-    - cron: '7,37 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch: {}
+
+concurrency:
+  group: iran-uae-monitor
+  cancel-in-progress: false
+
+env:
+  NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
+  LIVE_LATEST_URL: https://raw.githubusercontent.com/${{ github.repository }}/urgentdash-live/live/latest.json
+  HAS_NLM_COOKIES: ${{ secrets.NLM_COOKIES_JSON != '' }}
 
 jobs:
   run-monitor:
@@ -32,25 +40,93 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
-      - name: Preflight NotebookLM required secret
+      - name: Freshness gate
+        id: freshness
         env:
-          NLM_COOKIES_JSON: ${{ secrets.NLM_COOKIES_JSON }}
+          LIVE_LATEST_URL: ${{ env.LIVE_LATEST_URL }}
         run: |
-          if [ -z "$NLM_COOKIES_JSON" ]; then
-            echo "::error::NLM_COOKIES_JSON is required for this workflow."
-            exit 1
-          fi
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from urllib.request import urlopen
+
+          latest_url = os.environ["LIVE_LATEST_URL"]
+          output_path = os.environ["GITHUB_OUTPUT"]
+          skip = False
+          reason = "stale_or_missing"
+          try:
+              with urlopen(latest_url, timeout=15) as response:
+                  payload = json.load(response)
+              published_at = str(payload.get("publishedAt") or "").strip()
+              if published_at:
+                  published_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00")).astimezone(timezone.utc)
+                  age_seconds = (datetime.now(timezone.utc) - published_dt).total_seconds()
+                  if age_seconds < 25 * 60:
+                      skip = True
+                      reason = f"published_{int(age_seconds)}s_ago"
+          except Exception as exc:
+              reason = f"freshness_probe_failed:{type(exc).__name__}"
+
+          with open(output_path, "a", encoding="utf-8") as f:
+              f.write(f"skip={'true' if skip else 'false'}\n")
+              f.write(f"reason={reason}\n")
+          print(f"Freshness gate skip={skip} reason={reason}")
+          PY
+
+      - name: Run monitor lite
+        if: steps.freshness.outputs.skip != 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          WHATSAPP_RECIPIENTS: ${{ secrets.WHATSAPP_RECIPIENTS }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STORAGE_BACKEND: ${{ secrets.STORAGE_BACKEND }}
+          STORAGE_ENABLED: "true"
+          HEADLESS: "true"
+          LOG_LEVEL: "INFO"
+          PHASE2_ENABLED: "true"
+          APPROVE_SEND: ${{ secrets.APPROVE_SEND || '' }}
+        run: |
+          python scripts/run_now.py --mode lite --telegram-send
+
+      - name: Export live lite payloads
+        id: export_lite
+        if: steps.freshness.outputs.skip != 'true'
+        run: |
+          python scripts/export_hyie_live.py --publish-mode lite
+
+      - name: Publish lite payloads to urgentdash-live
+        if: steps.export_lite.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/publish_live_branch.py \
+            --source-live-dir live \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GH_TOKEN" \
+            --commit-message "chore: update live lite payloads [skip ci]"
+
+      - name: Smoke test published live payloads
+        if: steps.export_lite.outcome == 'success'
+        env:
+          LIVE_LATEST_URL: ${{ env.LIVE_LATEST_URL }}
+        run: |
+          python scripts/smoke_test_live.py --latest-url "$LIVE_LATEST_URL"
 
       - name: Restore NotebookLM auth profile
+        id: restore_notebooklm
+        if: steps.freshness.outputs.skip != 'true' && env.HAS_NLM_COOKIES == 'true'
+        continue-on-error: true
         env:
           NLM_COOKIES_JSON: ${{ secrets.NLM_COOKIES_JSON }}
           NLM_METADATA_JSON: ${{ secrets.NLM_METADATA_JSON }}
-          NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
+          NOTEBOOKLM_MCP_CLI_PATH: ${{ env.NOTEBOOKLM_MCP_CLI_PATH }}
         run: |
-          if [ -z "$NLM_COOKIES_JSON" ]; then
-            echo "::error::NLM_COOKIES_JSON not set, cannot restore NotebookLM profile"
-            exit 1
-          fi
           mkdir -p "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default"
           chmod 700 "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default"
           echo "$NLM_COOKIES_JSON" > "$NOTEBOOKLM_MCP_CLI_PATH/profiles/default/cookies.json"
@@ -62,8 +138,10 @@ jobs:
           echo "NotebookLM profile restored."
 
       - name: Validate NotebookLM auth profile
+        if: steps.restore_notebooklm.outcome == 'success'
+        continue-on-error: true
         env:
-          NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
+          NOTEBOOKLM_MCP_CLI_PATH: ${{ env.NOTEBOOKLM_MCP_CLI_PATH }}
         run: |
           python - <<'PY'
           from notebooklm_tools.core.auth import AuthManager
@@ -79,74 +157,47 @@ jobs:
           print(f"NotebookLM auth validated. notebooks={len(notebooks)}")
           PY
 
-      - name: Run monitor once (canonical)
+      - name: Run monitor ai
+        id: run_ai
+        if: steps.freshness.outputs.skip != 'true'
+        continue-on-error: true
         env:
-          # Telegram
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-          # Twilio WhatsApp (optional)
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
           WHATSAPP_RECIPIENTS: ${{ secrets.WHATSAPP_RECIPIENTS }}
-
-          # Storage backend (Phase 4)
-          # - If DATABASE_URL is set, backend auto switches to 'postgres'.
-          # - If empty, it stays sqlite (local file).
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STORAGE_BACKEND: ${{ secrets.STORAGE_BACKEND }}
           STORAGE_ENABLED: "true"
-
-          # Runtime
           HEADLESS: "true"
           LOG_LEVEL: "INFO"
-          NOTEBOOKLM_MCP_CLI_PATH: ${{ github.workspace }}/.notebooklm-mcp-cli
-
-          # Phase 2 (NotebookLM): enabled; falls back to rule-based analysis on upload failure.
           PHASE2_ENABLED: "true"
-          # Optional: set APPROVE_SEND=APPROVE_SEND when using non-interactive forced sending
           APPROVE_SEND: ${{ secrets.APPROVE_SEND || '' }}
+          NOTEBOOKLM_MCP_CLI_PATH: ${{ env.NOTEBOOKLM_MCP_CLI_PATH }}
         run: |
-          python scripts/run_now.py --telegram-send
+          python scripts/run_now.py --mode ai --telegram-send
 
-      - name: Publish hyie_state.json to urgentdash-live branch
-        if: success()
+      - name: Export live ai payloads
+        id: export_ai
+        if: steps.run_ai.outcome == 'success'
         run: |
-          if [ ! -f state/hyie_state.json ]; then
-            echo "state/hyie_state.json not found, skipping publish"
-            exit 0
-          fi
-          cp state/hyie_state.json /tmp/hyie_state.json
-          git checkout -- state/hyie_state.json || true
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code --heads origin urgentdash-live > /dev/null; then
-            git fetch origin urgentdash-live
-            git checkout urgentdash-live
-          else
-            git checkout --orphan urgentdash-live
-            git rm -rf . > /dev/null 2>&1 || true
-          fi
-          if [ ! -d react ]; then
-            git checkout origin/main -- react
-          fi
-          mkdir -p live
-          cp /tmp/hyie_state.json live/hyie_state.json
-          git add live/hyie_state.json
-          if git diff --cached --quiet; then
-            echo "No changes"
-          else
-            git commit -m "chore: update hyie_state.json [skip ci]"
-            if git ls-remote --exit-code --heads origin urgentdash-live > /dev/null; then
-              git push origin urgentdash-live
-            else
-              git push -u origin urgentdash-live
-            fi
-          fi
-          echo "Published hyie_state.json to urgentdash-live branch"
+          python scripts/export_hyie_live.py --publish-mode ai
 
-      - name: Upload artifacts (reports/state/ledger) for debugging
+      - name: Publish ai payloads to urgentdash-live
+        if: steps.export_ai.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/publish_live_branch.py \
+            --source-live-dir live \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GH_TOKEN" \
+            --commit-message "chore: update live ai payloads [skip ci]"
+
+      - name: Upload artifacts (reports/state/ledger/live) for debugging
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -155,6 +206,7 @@ jobs:
             reports
             state
             ledger
+            live
             .health_state.json
           if-no-files-found: ignore
           retention-days: 7

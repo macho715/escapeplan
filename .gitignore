@@ -10,3 +10,6 @@ dist/
 .vercel/
 *.log
 logs/
+state/ai_input.latest.json
+live/latest.json
+live/v/
