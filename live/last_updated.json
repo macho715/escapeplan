@@ -1,0 +1,9 @@
+{
+  "published_at": "2026-03-06T14:50:16Z",
+  "state_ts": "2026-03-06T18:50:16+04:00",
+  "status": "degraded",
+  "degraded": true,
+  "version": "333204599f150ede4be4681475cf3eed28be7515",
+  "ai_version": null,
+  "ai_mode": null
+}

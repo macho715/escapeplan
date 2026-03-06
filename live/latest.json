@@ -1,0 +1,12 @@
+{
+  "version": "333204599f150ede4be4681475cf3eed28be7515",
+  "aiVersion": null,
+  "publishedAt": "2026-03-06T14:50:16Z",
+  "stateTs": "2026-03-06T18:50:16+04:00",
+  "aiUpdatedAt": null,
+  "status": "degraded",
+  "degraded": true,
+  "aiMode": null,
+  "litePath": "v/333204599f150ede4be4681475cf3eed28be7515/state-lite.json",
+  "aiPath": null
+}
