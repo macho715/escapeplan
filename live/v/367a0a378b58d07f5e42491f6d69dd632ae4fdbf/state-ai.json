@@ -1,0 +1,22 @@
+{
+  "ai_analysis": {
+    "abu_dhabi_level": "LOW",
+    "analysis_source": "fallback",
+    "dubai_level": "LOW",
+    "key_points": [
+      "Qatar announces rules for Ramadan mosque retreatSelected mosques to host i‘tikaf during final 10 days of RamadanJust now2m read",
+      "Day 6 of US-Iran war: UAE intercepts more missiles, drones; 94 residents injured since conflict began",
+      "Day 7 of war: UAE President visits injured; Trump asks Iran for 'unconditional surrender'"
+    ],
+    "notebook_url": null,
+    "recommended_action": "일상 모니터링 유지, 신규 경보 발생 시 즉시 확인",
+    "sentiment": "긴급",
+    "summary": "총 80건 기준 룰 기반 위험 평가",
+    "threat_level": "LOW",
+    "threat_score": 17,
+    "updated_at": "2026-03-07T13:47:21+04:00"
+  },
+  "ai_mode": "fallback",
+  "ai_updated_at": "2026-03-07T13:47:21+04:00",
+  "source_version": "367a0a378b58d07f5e42491f6d69dd632ae4fdbf"
+}
