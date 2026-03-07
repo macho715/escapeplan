@@ -1,12 +1,12 @@
 {
-  "version": "07dd2143a9f7119e940f99a48482840fb9831fdd",
-  "aiVersion": "08dd76caf59711f78f7c4491e264ea614d8a254a",
-  "publishedAt": "2026-03-07T20:37:47Z",
-  "stateTs": "2026-03-08T00:37:43+04:00",
-  "aiUpdatedAt": "2026-03-08T00:37:47+04:00",
+  "version": "b7ed9d4fa4b0b795b1a8a634c5360313caad4e72",
+  "aiVersion": null,
+  "publishedAt": "2026-03-07T21:32:49Z",
+  "stateTs": "2026-03-08T01:32:49+04:00",
+  "aiUpdatedAt": null,
   "status": "degraded",
   "degraded": true,
-  "aiMode": "fallback",
-  "litePath": "v/07dd2143a9f7119e940f99a48482840fb9831fdd/state-lite.json",
-  "aiPath": "v/07dd2143a9f7119e940f99a48482840fb9831fdd/state-ai.json"
+  "aiMode": null,
+  "litePath": "v/b7ed9d4fa4b0b795b1a8a634c5360313caad4e72/state-lite.json",
+  "aiPath": null
 }
