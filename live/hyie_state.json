@@ -756,5 +756,22 @@
     "red_imminent": true,
     "strike_detected": true
   },
-  "urgency": 0.75
+  "urgency": 0.75,
+  "ai_analysis": {
+    "abu_dhabi_level": "LOW",
+    "analysis_source": "fallback",
+    "dubai_level": "LOW",
+    "key_points": [
+      "UAE Edition",
+      "UAE destroys another nine ballistic missiles and 109 drones launched by Iran",
+      "Israel launches 'broad-scale' attack on Tehran; Iran says targets heart of Tel Aviv"
+    ],
+    "notebook_url": null,
+    "recommended_action": "일상 모니터링 유지, 신규 경보 발생 시 즉시 확인",
+    "sentiment": "긴급",
+    "summary": "총 74건 기준 룰 기반 위험 평가",
+    "threat_level": "LOW",
+    "threat_score": 16,
+    "updated_at": "2026-03-07T06:42:29+04:00"
+  }
 }
