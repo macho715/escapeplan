@@ -1,0 +1,22 @@
+{
+  "ai_analysis": {
+    "abu_dhabi_level": "LOW",
+    "analysis_source": "fallback",
+    "dubai_level": "LOW",
+    "key_points": [
+      "UAE Edition",
+      "Iran says will not target neighbours unless attack originates from them",
+      "Israel launches 'broad-scale' attack on Tehran; Iran says targets heart of Tel Aviv"
+    ],
+    "notebook_url": null,
+    "recommended_action": "일상 모니터링 유지, 신규 경보 발생 시 즉시 확인",
+    "sentiment": "긴급",
+    "summary": "총 74건 기준 룰 기반 위험 평가",
+    "threat_level": "LOW",
+    "threat_score": 15,
+    "updated_at": "2026-03-07T13:16:26+04:00"
+  },
+  "ai_mode": "fallback",
+  "ai_updated_at": "2026-03-07T13:16:26+04:00",
+  "source_version": "424ab55e6fb22051a70c43377b66f93b3c3f836c"
+}
