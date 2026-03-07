@@ -756,5 +756,22 @@
     "red_imminent": true,
     "strike_detected": true
   },
-  "urgency": 0.75
+  "urgency": 0.75,
+  "ai_analysis": {
+    "abu_dhabi_level": "LOW",
+    "analysis_source": "fallback",
+    "dubai_level": "MEDIUM",
+    "key_points": [
+      "UAE Edition",
+      "Motorist killed by falling debris after interception in Dubai",
+      "‘Pardon us for any shortcomings’: President vows to defend UAE after Iran attacks"
+    ],
+    "notebook_url": null,
+    "recommended_action": "일상 모니터링 유지, 신규 경보 발생 시 즉시 확인",
+    "sentiment": "긴급",
+    "summary": "총 76건 기준 룰 기반 위험 평가",
+    "threat_level": "LOW",
+    "threat_score": 14,
+    "updated_at": "2026-03-08T00:37:47+04:00"
+  }
 }
