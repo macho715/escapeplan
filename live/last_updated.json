@@ -1,9 +1,9 @@
 {
-  "published_at": "2026-03-07T17:33:39Z",
+  "published_at": "2026-03-07T17:33:43Z",
   "state_ts": "2026-03-07T21:33:39+04:00",
   "status": "degraded",
   "degraded": true,
   "version": "4ac938834435f8f5184a44837675c25a5f5296bd",
-  "ai_version": null,
-  "ai_mode": null
+  "ai_version": "9eb7b355dd0704be5d4c07fb8060b9d0b6467fd2",
+  "ai_mode": "fallback"
 }
